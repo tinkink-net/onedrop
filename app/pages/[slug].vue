@@ -79,33 +79,11 @@ async function uploadFile() {
   }
 }
 
-function formatTime(time: number) {
-  return new Date(time).toLocaleString()
-}
-
-function formatRelativeTime(time: number) {
-  const deltaMs = time - Date.now()
-  const absMs = Math.abs(deltaMs)
-  const minute = 1000 * 60
-  const hour = minute * 60
-  const day = hour * 24
-
-  if (absMs < minute) {
-    return deltaMs >= 0 ? 'in moments' : 'just now'
+async function handleFilePickedAndUpload(event: Event) {
+  onFilePicked(event)
+  if (selectedFile.value) {
+    await uploadFile()
   }
-
-  if (absMs < hour) {
-    const minutes = Math.round(absMs / minute)
-    return deltaMs >= 0 ? `in ${minutes}m` : `${minutes}m ago`
-  }
-
-  if (absMs < day) {
-    const hours = Math.round(absMs / hour)
-    return deltaMs >= 0 ? `in ${hours}h` : `${hours}h ago`
-  }
-
-  const days = Math.round(absMs / day)
-  return deltaMs >= 0 ? `in ${days}d` : `${days}d ago`
 }
 
 function formatBytes(size: number) {
@@ -154,103 +132,86 @@ onMounted(loadSpace)
 </script>
 
 <template>
-  <main class="relative mx-auto min-h-screen w-full max-w-6xl px-5 py-8 md:px-8 md:py-10">
-    <div class="pointer-events-none absolute inset-0 overflow-hidden">
-      <div class="absolute top-2 -left-10 h-64 w-64 rounded-full bg-[#a7d8ff]/30 blur-3xl" />
-      <div class="absolute top-24 -right-10 h-64 w-64 rounded-full bg-[#ffdd9d]/35 blur-3xl" />
-    </div>
+  <main class="relative mx-auto flex min-h-full w-full max-w-4xl flex-col px-6 py-10 md:py-16 text-[color:var(--text)] flex-1">
 
-    <NuxtLink to="/" class="relative inline-flex items-center rounded-full border border-[rgba(16,38,31,0.2)] bg-white/70 px-4 py-2 text-sm font-medium text-[#21483f] transition hover:bg-white">← Back</NuxtLink>
+    <nav class="mb-12 flex items-center justify-between">
+      <NuxtLink to="/" class="flex items-center gap-2 text-sm font-medium text-[color:var(--muted)] hover:text-[color:var(--text)] transition-colors">
+        <span class="font-mono-brand">←</span> Home
+      </NuxtLink>
+      <div v-if="space" class="font-mono-brand text-[11px] text-[color:var(--muted)] uppercase tracking-widest">
+         Expires {{ formatTimeWithRelative(space.expiresAt) }}
+      </div>
+    </nav>
 
-    <header class="relative mt-4 surface-glass rounded-3xl p-6 shadow-[0_18px_40px_rgba(18,41,35,0.09)] md:p-7">
-      <div class="flex flex-wrap items-start justify-between gap-4">
+    <header class="mb-14 border-b border-[color:var(--border)] pb-8">
+      <div class="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
         <div>
-          <p class="font-mono-brand text-xs tracking-[0.2em] text-[#1c6d58]">SPACE</p>
-          <h1 class="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">{{ slug }}</h1>
+           <p class="font-mono-brand text-[11px] uppercase tracking-widest text-[color:var(--muted)]">Space</p>
+           <h1 class="mt-2 text-5xl font-medium tracking-tight">{{ slug }}</h1>
         </div>
-        <span class="rounded-full bg-[#effaf5] px-3 py-1 text-xs font-semibold text-[#0d684f]">Temporary Share Room</span>
-      </div>
-
-      <div v-if="space" class="mt-5 grid gap-2 text-sm text-[color:var(--muted)] md:grid-cols-3">
-        <p>Created: <span class="font-medium text-[color:var(--text)]">{{ formatTime(space.createdAt) }}</span></p>
-        <p>Expires: <span class="font-medium text-[color:var(--text)]">{{ formatTime(space.expiresAt) }}</span></p>
-        <p>Remaining: <span class="font-medium text-[color:var(--text)]">{{ formatRelativeTime(space.expiresAt) }}</span></p>
-      </div>
-
-      <div v-if="spaceUrl" class="mt-5 rounded-2xl border border-[#b7d9cb] bg-[#f5fffa] p-4">
-        <p class="text-xs font-semibold uppercase tracking-[0.14em] text-[#1c6e58]">Space URL</p>
-        <a
-          :href="spaceUrl"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="mt-2 block break-all text-sm font-medium text-[#0a5948] underline decoration-[#90cab6] underline-offset-2 hover:text-[#083f33]"
-        >
-          {{ spaceUrl }}
-        </a>
-        <div class="mt-3 flex flex-wrap gap-2">
-          <button
-            class="rounded-lg border border-[#9fcfbc] bg-white px-3 py-1.5 text-xs font-semibold text-[#0b6552] hover:bg-[#f6fffa] disabled:opacity-60"
-            :disabled="isCopying"
-            @click="copySpaceUrl"
-          >
-            {{ isCopying ? 'Copying…' : 'Copy link' }}
+        <div v-if="spaceUrl" class="flex items-center gap-3">
+          <!-- show space url -->
+          <span class="rounded-md bg-[color:var(--bg-0)] px-3 py-1 text-[11px] font-mono-brand text-[color:var(--muted)] md:inline-flex">
+            {{ spaceUrl }}
+          </span>
+          <button @click="copySpaceUrl" class="text-sm font-medium hover:underline underline-offset-4 disabled:opacity-50" :disabled="isCopying">
+             {{ copyStatus || 'Copy Link' }}
           </button>
-          <button
-            class="rounded-lg border border-[#9fcfbc] bg-white px-3 py-1.5 text-xs font-semibold text-[#0b6552] hover:bg-[#f6fffa]"
-            @click="openSpaceInNewTab"
-          >
-            Open
-          </button>
-          <span v-if="copyStatus" class="rounded-lg bg-[#fff6d6] px-3 py-1.5 text-xs font-medium text-[#7d5a00]">{{ copyStatus }}</span>
         </div>
       </div>
     </header>
 
-    <section class="relative mt-6 surface-glass rounded-3xl p-6 shadow-[0_18px_40px_rgba(18,41,35,0.09)] md:p-7">
-      <h2 class="text-xl font-semibold">Upload file</h2>
-      <p class="mt-1 text-sm text-[color:var(--muted)]">Upload and instantly share with everyone in this space.</p>
+    <section class="grid grid-cols-1 gap-12 lg:grid-cols-3">
 
-      <div class="mt-4 flex flex-col gap-3 md:flex-row md:items-center">
-        <input ref="uploadInput" type="file" class="w-full rounded-xl border border-[rgba(16,38,31,0.2)] bg-white/80 px-3 py-2 text-sm" @change="onFilePicked">
-        <button
-          class="inline-flex items-center justify-center rounded-xl bg-[color:var(--primary)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[color:var(--primary-strong)] disabled:opacity-60"
-          :disabled="!selectedFile || isUploading"
-          @click="uploadFile"
-        >
-          {{ isUploading ? 'Uploading…' : 'Upload' }}
-        </button>
+      <!-- Upload area (Left column) -->
+      <div class="lg:col-span-1">
+         <h2 class="mb-4 text-sm font-medium text-[color:var(--text)]">Add Files</h2>
+         <div class="relative flex cursor-pointer flex-col items-center justify-center border border-dashed border-[color:var(--border)] bg-[color:var(--bg-0)] p-10 text-center transition-colors hover:bg-[color:var(--bg-1)]">
+            <input ref="uploadInput" type="file" class="absolute inset-0 cursor-pointer opacity-0" @change="handleFilePickedAndUpload">
+            <span class="mb-2 text-2xl font-light text-[color:var(--muted)]">+</span>
+            <span class="text-sm font-medium text-[color:var(--text)]">Click or Drop</span>
+            <span class="mt-1 text-[11px] text-[color:var(--muted)]">Any file size limit</span>
+            <div v-if="isUploading" class="absolute inset-0 flex items-center justify-center bg-[color:var(--card)]/90 text-sm font-medium backdrop-blur-sm">
+               Uploading...
+            </div>
+         </div>
+         <p v-if="uploadError" class="mt-3 text-sm text-[color:var(--danger)]">{{ uploadError }}</p>
       </div>
-      <p v-if="selectedFile" class="mt-2 text-xs text-[color:var(--muted)]">Selected: {{ selectedFile.name }}</p>
-      <p v-if="uploadError" class="mt-3 text-sm text-[color:var(--danger)]">{{ uploadError }}</p>
-    </section>
 
-    <section class="relative mt-6 surface-glass rounded-3xl p-6 shadow-[0_18px_40px_rgba(18,41,35,0.09)] md:p-7">
-      <h2 class="text-xl font-semibold">Files</h2>
+      <!-- File List (Right columns) -->
+      <div class="lg:col-span-2">
+         <h2 class="mb-4 border-b border-[color:var(--border)] pb-2 text-sm font-medium text-[color:var(--text)]">Space Contents</h2>
 
-      <p v-if="isLoading" class="mt-4 text-sm text-[color:var(--muted)]">Loading files…</p>
-      <p v-else-if="errorMessage" class="mt-4 text-sm text-[color:var(--danger)]">{{ errorMessage }}</p>
+         <p v-if="isLoading" class="mt-4 text-[13px] text-[color:var(--muted)]">Loading files...</p>
+         <p v-else-if="errorMessage" class="mt-4 text-[13px] text-[color:var(--danger)]">{{ errorMessage }}</p>
 
-      <ul v-else-if="space?.files.length" class="mt-4 grid gap-3">
-        <li
-          v-for="file in space.files"
-          :key="file.key"
-          class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[rgba(16,38,31,0.14)] bg-white/85 p-4"
-        >
-          <div class="min-w-0">
-            <p class="truncate font-medium text-[color:var(--text)]">{{ file.name }}</p>
-            <p class="mt-1 text-xs text-[color:var(--muted)]">{{ formatBytes(file.size) }}</p>
-            <p v-if="file.uploadedAt" class="mt-1 text-xs text-[color:var(--muted)]">Uploaded {{ formatTime(new Date(file.uploadedAt).getTime()) }}</p>
-          </div>
-          <a
-            class="inline-flex rounded-xl border border-[rgba(16,38,31,0.22)] bg-white px-3 py-2 text-xs font-semibold text-[#1f4d42] transition hover:bg-[#eefaf4]"
-            :href="`/api/spaces/${slug}/files/${file.key}`"
-          >
-            Download
-          </a>
-        </li>
-      </ul>
+         <ul v-else-if="space?.files.length" class="mt-4 grid gap-2">
+            <li
+              v-for="file in space.files"
+              :key="file.key"
+              class="group flex flex-col justify-between gap-3 border border-transparent border-b-[color:var(--border)] py-3 sm:flex-row sm:items-center hover:border-b-[color:var(--text)] transition-colors"
+            >
+              <div class="min-w-0">
+                <p class="truncate text-[14px] font-medium text-[color:var(--text)]">{{ file.name }}</p>
+                <div class="mt-1 flex gap-3 text-[11px] text-[color:var(--muted)] font-mono-brand">
+                   <span>{{ formatBytes(file.size) }}</span>
+                   <span v-if="file.uploadedAt">Uploaded {{ formatTimeWithRelative(new Date(file.uploadedAt).getTime()) }}</span>
+                </div>
+              </div>
+              <a
+                class="shrink-0 text-[13px] font-medium text-[color:var(--muted)] transition-colors hover:text-[color:var(--text)]"
+                :href="`/api/spaces/${slug}/files/${file.key}`"
+              >
+                Download ↓
+              </a>
+            </li>
+         </ul>
 
-      <p v-else class="mt-4 text-sm text-[color:var(--muted)]">No files uploaded yet.</p>
+         <div v-else class="mt-10 text-center">
+            <p class="text-[13px] text-[color:var(--muted)]">No files uploaded yet.</p>
+         </div>
+      </div>
+
     </section>
   </main>
 </template>

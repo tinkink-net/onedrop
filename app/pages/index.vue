@@ -20,38 +20,13 @@ const createdUrl = ref('')
 const createdSlug = ref('')
 const errorMessage = ref('')
 const joinError = ref('')
+const showJoin = ref(false)
 const copyStatus = ref('')
 const recentSpaces = ref<RecentSpace[]>([])
 const isRefreshingRecent = ref(false)
 
 function normalizeInputSlug(value: string) {
   return value.trim().toUpperCase()
-}
-
-function formatTime(time: number) {
-  return new Date(time).toLocaleString()
-}
-
-function relativeTime(time: number) {
-  const diff = time - Date.now()
-  const abs = Math.abs(diff)
-  const minutes = Math.round(abs / (1000 * 60))
-
-  if (minutes < 1) {
-    return diff >= 0 ? 'in moments' : 'just now'
-  }
-
-  if (minutes < 60) {
-    return diff >= 0 ? `in ${minutes}m` : `${minutes}m ago`
-  }
-
-  const hours = Math.round(minutes / 60)
-  if (hours < 24) {
-    return diff >= 0 ? `in ${hours}h` : `${hours}h ago`
-  }
-
-  const days = Math.round(hours / 24)
-  return diff >= 0 ? `in ${days}d` : `${days}d ago`
 }
 
 async function copyText(text: string) {
@@ -174,134 +149,92 @@ onMounted(() => {
 </script>
 
 <template>
-  <main class="relative mx-auto min-h-screen w-full max-w-6xl px-5 py-10 md:px-8 md:py-14">
-    <div class="pointer-events-none absolute inset-0 overflow-hidden">
-      <div class="absolute -top-20 -left-10 h-72 w-72 rounded-full bg-[#99d7b8]/35 blur-3xl" />
-      <div class="absolute top-24 -right-16 h-72 w-72 rounded-full bg-[#9cc8f1]/35 blur-3xl" />
-      <div class="absolute bottom-8 left-1/2 h-56 w-56 -translate-x-1/2 rounded-full bg-[#ffe3a3]/45 blur-3xl" />
-    </div>
+  <main class="relative mx-auto flex min-h-full w-full max-w-3xl flex-col justify-center px-6 py-12 md:py-20 text-[color:var(--text)] flex-1">
 
-    <section class="relative">
-      <p class="font-mono-brand text-xs tracking-[0.22em] text-[#1d6355]">ONEDROP</p>
-      <h1 class="mt-3 max-w-3xl text-4xl font-semibold leading-tight md:text-5xl">Share files fast through temporary rooms, without accounts.</h1>
-      <p class="mt-4 max-w-2xl text-[15px] leading-relaxed text-[color:var(--muted)]">Create a space, send one link, and collaborate for a short window. Each space expires automatically to keep sharing clean and low-friction.</p>
-    </section>
+    <header class="mb-14">
+      <div class="flex items-center gap-3">
+        <div class="h-3 w-3 bg-[#111] rounded-sm"></div>
+        <p class="font-mono-brand text-[11px] font-semibold tracking-widest text-[#111]">ONEDROP.TINKCLOUD.COM</p>
+      </div>
+      <h1 class="mt-8 text-4xl font-medium tracking-tight md:text-5xl">Share files without friction.</h1>
+      <p class="mt-5 max-w-xl text-[15px] leading-relaxed text-[#555]">Temporary spaces that expire automatically. No accounts required. Create a space, drop your files, and collaborate instantly.</p>
+    </header>
 
-    <section class="relative mt-10 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-      <div class="surface-glass rounded-3xl p-6 shadow-[0_18px_40px_rgba(18,41,35,0.09)] md:p-7">
-        <div class="flex items-center justify-between">
-          <h2 class="text-xl font-semibold">Create a Space</h2>
-          <span class="rounded-full bg-[#e9f8f2] px-3 py-1 text-xs font-medium text-[#0e705b]">Instant</span>
-        </div>
-        <p class="mt-2 text-sm text-[color:var(--muted)]">Pick expiration between 1 and 24 hours.</p>
+    <div class="space-y-6">
 
-        <label class="mt-6 block text-sm font-medium" for="hours">Expires in (hours)</label>
-        <div class="mt-2 flex gap-3">
-          <input
-            id="hours"
-            v-model.number="hours"
-            type="number"
-            min="1"
-            max="24"
-            class="w-full rounded-xl border border-[rgba(16,38,31,0.2)] bg-white/80 px-4 py-3 outline-none ring-[color:var(--primary)]/20 transition focus:ring"
-          >
-          <button
-            class="rounded-xl bg-[color:var(--primary)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[color:var(--primary-strong)] disabled:opacity-60"
-            :disabled="isCreating"
-            @click="createSpace"
-          >
-            {{ isCreating ? 'Creating…' : 'Create' }}
+      <!-- Create Action (Primary) -->
+      <section class="border border-[color:var(--border)] bg-white p-6 md:p-8">
+        <div class="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+          <div class="flex-1">
+             <label class="block font-mono-brand text-[11px] tracking-widest text-[#666] uppercase" for="hours">Space Expiration</label>
+             <div class="mt-3 flex items-center gap-3 border-b border-[color:var(--border)] pb-2 transition-colors focus-within:border-[color:var(--primary)]">
+               <input id="hours" v-model.number="hours" type="number" min="1" max="24" class="w-16 bg-transparent text-2xl font-medium outline-none" />
+               <span class="text-[15px] text-[#666]">hours</span>
+             </div>
+          </div>
+          <button class="flex items-center gap-2 bg-[color:var(--primary)] px-7 py-3.5 text-sm font-medium text-white transition-colors hover:bg-[color:var(--primary-hover)] disabled:opacity-50" :disabled="isCreating" @click="createSpace">
+            {{ isCreating ? 'Creating...' : 'Create Space' }} <span class="ml-1 font-mono-brand text-xs font-normal">→</span>
           </button>
         </div>
 
-        <div v-if="createdUrl" class="mt-5 rounded-2xl border border-[#b7d9cb] bg-[#f5fffa] p-4">
-          <p class="text-xs font-semibold uppercase tracking-[0.14em] text-[#1c6e58]">Generated Link</p>
-          <a
-            :href="createdUrl"
-            class="mt-2 block break-all text-sm font-medium text-[#0a5948] underline decoration-[#90cab6] underline-offset-2 hover:text-[#083f33]"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {{ createdUrl }}
-          </a>
-          <div class="mt-3 flex flex-wrap gap-2">
-            <button
-              class="rounded-lg border border-[#9fcfbc] bg-white px-3 py-1.5 text-xs font-semibold text-[#0b6552] hover:bg-[#f6fffa]"
-              @click="copyText(createdUrl)"
-            >
-              Copy link
-            </button>
-            <button
-              class="rounded-lg border border-[#9fcfbc] bg-white px-3 py-1.5 text-xs font-semibold text-[#0b6552] hover:bg-[#f6fffa]"
-              @click="openCreatedUrl"
-            >
-              Open
-            </button>
-            <span v-if="createdSlug" class="rounded-lg bg-[#e9f8f2] px-3 py-1.5 text-xs font-medium text-[#0c5a4a]">Slug {{ createdSlug }}</span>
-            <span v-if="copyStatus" class="rounded-lg bg-[#fff6d6] px-3 py-1.5 text-xs font-medium text-[#7d5a00]">{{ copyStatus }}</span>
+        <!-- Created State -->
+        <div v-if="createdUrl" class="mt-8 border-t border-[color:var(--border)] pt-6">
+          <p class="mb-3 font-mono-brand text-[11px] tracking-widest text-[#666] uppercase">Copy URL to Share</p>
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <input readonly :value="createdUrl" class="flex-1 border border-[color:var(--border)] bg-[color:var(--bg-0)] px-4 py-2.5 font-mono-brand text-sm text-[color:var(--text)] outline-none" />
+            <div class="flex gap-2">
+              <button class="whitespace-nowrap border border-[color:var(--border)] bg-transparent px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[color:var(--bg-1)] disabled:opacity-60" @click="copyText(createdUrl)">
+                {{ copyStatus ? 'Copied!' : 'Copy Link' }}
+              </button>
+              <button class="border border-[color:var(--border)] bg-transparent px-4 py-2.5 text-sm font-medium transition-colors hover:bg-[color:var(--bg-1)]" @click="openCreatedUrl">
+                Open
+              </button>
+            </div>
           </div>
         </div>
-
         <p v-if="errorMessage" class="mt-4 text-sm text-[color:var(--danger)]">{{ errorMessage }}</p>
-      </div>
+      </section>
 
-      <div class="surface-glass rounded-3xl p-6 shadow-[0_18px_40px_rgba(18,41,35,0.09)] md:p-7">
-        <h2 class="text-xl font-semibold">Join a Space</h2>
-        <p class="mt-2 text-sm text-[color:var(--muted)]">Enter a 6-character slug to continue sharing.</p>
-
-        <label class="mt-6 block text-sm font-medium" for="slug">Space slug</label>
-        <input
-          id="slug"
-          v-model="slugInput"
-          maxlength="6"
-          placeholder="AB2C3D"
-          class="mt-2 w-full rounded-xl border border-[rgba(16,38,31,0.2)] bg-white/80 px-4 py-3 uppercase tracking-[0.08em] outline-none ring-[color:var(--primary)]/20 transition focus:ring"
-          @keyup.enter="joinSpace"
-        >
-
-        <button
-          class="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-[rgba(16,38,31,0.22)] bg-white px-4 py-3 text-sm font-semibold text-[#0f3028] transition hover:bg-[#f3faf7] disabled:opacity-60"
-          :disabled="isJoining"
-          @click="joinSpace"
-        >
-          {{ isJoining ? 'Checking…' : 'Join space' }}
+      <!-- Join Action (Triggered) -->
+      <section>
+        <button v-if="!showJoin" @click="showJoin = true" class="text-[13px] font-medium text-[color:var(--muted)] transition-colors hover:text-[color:var(--text)] underline decoration-[color:var(--border)] underline-offset-4">
+          Have a slug? Join an existing space
         </button>
-
-        <p v-if="joinError" class="mt-3 text-sm text-[color:var(--danger)]">{{ joinError }}</p>
-      </div>
-    </section>
-
-    <section class="relative mt-8 surface-glass rounded-3xl p-6 shadow-[0_14px_36px_rgba(18,41,35,0.08)] md:p-7">
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <h2 class="text-xl font-semibold">Recent Spaces</h2>
-        <span class="text-xs text-[color:var(--muted)]">Validated on load</span>
-      </div>
-
-      <p v-if="isRefreshingRecent" class="mt-4 text-sm text-[color:var(--muted)]">Checking active spaces…</p>
-
-      <ul v-else-if="recentSpaces.length" class="mt-4 grid gap-3 md:grid-cols-2">
-        <li
-          v-for="spaceItem in recentSpaces"
-          :key="spaceItem.slug"
-          class="rounded-2xl border border-[rgba(16,38,31,0.14)] bg-white/85 p-4"
-        >
-          <div class="flex items-start justify-between gap-3">
-            <div>
-              <p class="font-mono-brand text-sm tracking-[0.08em]">{{ spaceItem.slug }}</p>
-              <p class="mt-1 text-xs text-[color:var(--muted)]">Visited {{ relativeTime(spaceItem.lastVisitedAt) }}</p>
-              <p v-if="spaceItem.expiresAt" class="mt-1 text-xs text-[color:var(--muted)]">Expires {{ formatTime(spaceItem.expiresAt) }}</p>
+        <div v-else class="flex flex-col gap-4 border border-[color:var(--border)] bg-[color:var(--bg-0)] p-6 md:p-8">
+            <label class="block font-mono-brand text-[11px] tracking-widest text-[color:var(--muted)] uppercase" for="slug">Enter Space Slug</label>
+            <div class="flex flex-col gap-3 sm:flex-row">
+              <input id="slug" v-model="slugInput" maxlength="6" placeholder="AB2C3D" class="flex-1 border-b border-[color:var(--border)] bg-transparent px-0 py-2 text-xl font-medium uppercase tracking-[0.1em] outline-none transition-colors focus:border-[color:var(--primary)]" @keyup.enter="joinSpace" />
+              <button class="border border-[color:var(--primary)] px-6 py-2.5 text-sm font-medium text-[color:var(--primary)] transition-colors hover:bg-[color:var(--primary)] hover:text-white disabled:opacity-50" :disabled="isJoining" @click="joinSpace">
+                {{ isJoining ? 'Checking...' : 'Join' }}
+              </button>
             </div>
-            <button
-              class="rounded-lg bg-[#0f6b58] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#0b4f41]"
-              @click="openRecentSpace(spaceItem.slug)"
-            >
-              Open
-            </button>
-          </div>
-        </li>
-      </ul>
+            <p v-if="joinError" class="mt-1 text-sm text-[color:var(--danger)]">{{ joinError }}</p>
+        </div>
+      </section>
 
-      <p v-else class="mt-4 text-sm text-[color:var(--muted)]">No recent valid spaces yet.</p>
-    </section>
+      <!-- Recent Spaces -->
+      <section v-if="recentSpaces.length" class="mt-20 border-t border-[color:var(--border)] pt-10">
+        <div class="mb-6 flex items-center justify-between">
+          <h2 class="text-sm font-medium text-[color:var(--text)]">Recent Spaces</h2>
+          <span v-if="isRefreshingRecent" class="font-mono-brand text-[11px] text-[color:var(--muted)]">Syncing...</span>
+        </div>
+
+        <ul class="grid gap-3">
+          <li v-for="spaceItem in recentSpaces" :key="spaceItem.slug" class="group flex flex-col gap-4 border border-[color:var(--border)] bg-transparent p-4 transition-colors hover:bg-[color:var(--card)] sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p class="font-mono-brand text-[13px] tracking-wide text-[color:var(--text)]">{{ spaceItem.slug }}</p>
+              <div class="mt-1.5 flex items-center gap-3 text-[12px] text-[color:var(--muted)]">
+                <span>Visited {{ formatTimeWithRelative(spaceItem.lastVisitedAt) }}</span>
+                <span v-if="spaceItem.expiresAt" class="opacity-50">• Expires {{ formatTimeWithRelative(spaceItem.expiresAt) }}</span>
+              </div>
+            </div>
+            <button class="text-[13px] font-medium text-[color:var(--muted)] transition-colors group-hover:text-[color:var(--text)]" @click="openRecentSpace(spaceItem.slug)">
+              Re-enter →
+            </button>
+          </li>
+        </ul>
+      </section>
+
+    </div>
   </main>
 </template>
