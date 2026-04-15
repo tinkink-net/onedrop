@@ -1,4 +1,5 @@
 import { assertValidSlug, getBucket, listSpaceFiles, requireActiveSpace } from '../../utils/spaces'
+import { getRequestHeader } from 'h3'
 
 export default defineEventHandler(async (event) => {
   const slug = assertValidSlug(event.context.params?.slug || '')
@@ -6,8 +7,13 @@ export default defineEventHandler(async (event) => {
   const meta = await requireActiveSpace(bucket, slug)
   const files = await listSpaceFiles(bucket, slug)
 
+  const host = getRequestHeader(event, 'host')
+  const protocol = host?.includes('localhost') ? 'http' : 'https'
+  const origin = host ? `${protocol}://${host}` : 'https://onedrop.tinkcloud.com'
+
   return {
     slug,
+    url: `${origin}/${slug}`,
     createdAt: meta.createdAt,
     expiresAt: meta.expiresAt,
     files

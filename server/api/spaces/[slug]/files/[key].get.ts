@@ -1,5 +1,5 @@
 import { createError, setHeader } from 'h3'
-import { assertValidFileKey, assertValidSlug, getBucket, getFileObjectKey, requireActiveSpace } from '../../../../utils/spaces'
+import { assertValidFileKey, assertValidSlug, getBucket, getFileObjectKey, getSpaceFileMeta, requireActiveSpace } from '../../../../utils/spaces'
 
 export default defineEventHandler(async (event) => {
   const slug = assertValidSlug(event.context.params?.slug || '')
@@ -13,7 +13,8 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'File not found.' })
   }
 
-  const filename = object.customMetadata?.name || key
+  const fileMeta = object.customMetadata?.name ? null : await getSpaceFileMeta(bucket, slug, key)
+  const filename = object.customMetadata?.name || fileMeta?.name || key
   setHeader(event, 'Content-Type', object.httpMetadata?.contentType || 'application/octet-stream')
   setHeader(event, 'Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`)
 

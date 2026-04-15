@@ -26,10 +26,12 @@ export default defineEventHandler(async (event) => {
   }
 
   const now = Date.now()
+  const expiresAt = now + expiresInHours * 60 * 60 * 1000
+
   await saveSpaceMeta(bucket, {
     slug,
     createdAt: now,
-    expiresAt: now + expiresInHours * 60 * 60 * 1000
+    expiresAt
   })
 
   const host = getRequestHeader(event, 'host')
@@ -39,6 +41,8 @@ export default defineEventHandler(async (event) => {
   return {
     slug,
     url: `${origin}/${slug}`,
+    createdAt: now,
+    expiresAt,
     expiresInHours
   }
 })

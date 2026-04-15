@@ -16,6 +16,11 @@ type SpaceFile = {
   uploadedAt?: string
 }
 
+type SpaceFileMeta = {
+  name: string
+  uploadedAt: string
+}
+
 export function normalizeSlug(value: string) {
   return value.trim().toUpperCase()
 }
@@ -42,7 +47,7 @@ export function generateSlug() {
 }
 
 export function getBucket(event: any) {
-  const bucket = event.context.cloudflare?.env?.ONEDROP_BUCKET ?? globalThis.ONEDROP_BUCKET
+  const bucket = event.context.cloudflare?.env?.ONEDROP_BUCKET ?? (globalThis as any).ONEDROP_BUCKET
   if (!bucket) {
     throw createError({ statusCode: 500, statusMessage: 'R2 bucket binding ONEDROP_BUCKET is not configured.' })
   }
@@ -55,6 +60,14 @@ function metaKey(slug: string) {
 
 function filesPrefix(slug: string) {
   return `spaces/${slug}/files/`
+}
+
+function filesMetaPrefix(slug: string) {
+  return `spaces/${slug}/files-meta/`
+}
+
+function fileMetaKey(slug: string, key: string) {
+  return `${filesMetaPrefix(slug)}${key}.json`
 }
 
 export async function getSpaceMeta(bucket: any, slug: string): Promise<SpaceMeta | null> {
@@ -75,6 +88,28 @@ export async function saveSpaceMeta(bucket: any, meta: SpaceMeta) {
   })
 }
 
+export async function saveSpaceFileMeta(bucket: any, slug: string, key: string, meta: SpaceFileMeta) {
+  await bucket.put(fileMetaKey(slug, key), JSON.stringify(meta), {
+    httpMetadata: {
+      contentType: 'application/json'
+    }
+  })
+}
+
+export async function getSpaceFileMeta(bucket: any, slug: string, key: string): Promise<SpaceFileMeta | null> {
+  const object = await bucket.get(fileMetaKey(slug, key))
+  if (!object) {
+    return null
+  }
+
+  try {
+    return JSON.parse(await object.text()) as SpaceFileMeta
+  }
+  catch {
+    return null
+  }
+}
+
 export async function requireActiveSpace(bucket: any, slug: string) {
   const meta = await getSpaceMeta(bucket, slug)
 
@@ -93,12 +128,25 @@ export async function listSpaceFiles(bucket: any, slug: string): Promise<SpaceFi
   const prefix = filesPrefix(slug)
   const listed = await bucket.list({ prefix })
 
-  return listed.objects.map((item: any) => ({
-    key: item.key.slice(prefix.length),
-    name: item.customMetadata?.name || item.key.slice(prefix.length),
-    size: item.size,
-    uploadedAt: item.customMetadata?.uploadedAt
+  const files = await Promise.all(listed.objects.map(async (item: any) => {
+    const key = item.key.slice(prefix.length)
+    const objectName = item.customMetadata?.name as string | undefined
+    const objectUploadedAt = item.customMetadata?.uploadedAt as string | undefined
+    const storedMeta = (!objectName || !objectUploadedAt) ? await getSpaceFileMeta(bucket, slug, key) : null
+
+    return {
+      key,
+      name: objectName || storedMeta?.name || key,
+      size: item.size,
+      uploadedAt: objectUploadedAt || storedMeta?.uploadedAt
+    }
   }))
+
+  return files.sort((a, b) => {
+    const at = a.uploadedAt ? new Date(a.uploadedAt).getTime() : 0
+    const bt = b.uploadedAt ? new Date(b.uploadedAt).getTime() : 0
+    return bt - at
+  })
 }
 
 export function getFileObjectKey(slug: string, key: string) {
@@ -125,7 +173,9 @@ export async function removeSpace(bucket: any, slug: string) {
 
 export async function listExpiredSpaceSlugs(bucket: any) {
   const listed = await bucket.list({ prefix: 'spaces/', delimiter: '/' })
-  const slugs = (listed.delimitedPrefixes || []).map((prefix: string) => prefix.split('/')[1]).filter(Boolean)
+  const slugs: string[] = ((listed.delimitedPrefixes || []) as string[])
+    .map((prefix) => prefix.split('/')[1])
+    .filter((slug): slug is string => Boolean(slug))
 
   const expired: string[] = []
 
