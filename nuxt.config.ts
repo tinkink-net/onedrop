@@ -19,6 +19,9 @@ export default defineNuxtConfig({
       meta: [
         { name: 'description', content: 'Onedrop is a simple and secure file sharing service that allows you to share files with anyone, anywhere.' }
       ],
+      link: [
+        { rel: 'icon', type: 'image/png', href: '/favicon.png' }
+      ],
       script: import.meta.env.PROD ? [
         {
           async: true,
