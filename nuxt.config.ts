@@ -15,7 +15,7 @@ export default defineNuxtConfig({
   },
   app: {
     head: {
-      title: 'Onedrop - A simple and secure file sharing service',
+      title: 'Onedrop - Share files without friction',
       meta: [
         { name: 'description', content: 'Onedrop is a simple and secure file sharing service that allows you to share files with anyone, anywhere.' }
       ],
