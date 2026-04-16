@@ -27,6 +27,7 @@ const spaceUrl = computed(() => {
   return space.value?.url || ''
 })
 const hasFiles = computed(() => Boolean(space.value?.files.length))
+const showUploadArea = computed(() => !hasFiles.value || isUploadPanelOpen.value)
 
 watch(hasFiles, (value) => {
   if (!value) {
@@ -186,14 +187,14 @@ onMounted(loadSpace)
       </div>
     </header>
 
-    <section class="grid grid-cols-1 gap-12 lg:grid-cols-3">
+    <section class="grid grid-cols-1 gap-12" :class="showUploadArea ? 'lg:grid-cols-3' : 'lg:grid-cols-1'">
 
-       <!-- Upload area (Left column) -->
-       <div class="lg:col-span-1">
-         <div class="mb-4 flex items-center justify-between">
-           <h2 class="text-sm font-medium text-[color:var(--text)]">Upload Files</h2>
-           <button
-             v-if="hasFiles"
+        <!-- Upload area (Left column) -->
+        <div v-if="showUploadArea" class="lg:col-span-1">
+          <div class="mb-4 flex items-center justify-between">
+            <h2 class="text-sm font-medium text-[color:var(--text)]">Upload Files</h2>
+            <button
+              v-if="hasFiles"
              class="text-[12px] font-medium text-[color:var(--muted)] transition-colors hover:text-[color:var(--text)]"
              @click="isUploadPanelOpen ? closeUploadPanel() : openUploadPanel()"
            >
@@ -205,21 +206,27 @@ onMounted(loadSpace)
            <span class="mb-2 text-2xl font-light text-[color:var(--muted)]">+</span>
            <span class="text-sm font-medium text-[color:var(--text)]">Click or Drop</span>
            <span class="mt-1 text-[11px] text-[color:var(--muted)]">Any file size limit</span>
-           <div v-if="isUploading" class="absolute inset-0 flex items-center justify-center bg-[color:var(--card)]/90 text-sm font-medium backdrop-blur-sm">
-             Uploading...
-           </div>
-         </div>
-         <div v-else class="rounded border border-[color:var(--border)] bg-[color:var(--bg-0)] p-4 text-[12px] text-[color:var(--muted)]">
-           Upload panel is minimized.
-         </div>
-         <p v-if="uploadError" class="mt-3 text-sm text-[color:var(--danger)]">{{ uploadError }}</p>
-       </div>
+            <div v-if="isUploading" class="absolute inset-0 flex items-center justify-center bg-[color:var(--card)]/90 text-sm font-medium backdrop-blur-sm">
+              Uploading...
+            </div>
+          </div>
+          <p v-if="uploadError" class="mt-3 text-sm text-[color:var(--danger)]">{{ uploadError }}</p>
+        </div>
 
-      <!-- File List (Right columns) -->
-      <div class="lg:col-span-2">
-         <h2 class="mb-4 border-b border-[color:var(--border)] pb-2 text-sm font-medium text-[color:var(--text)]">Shared Files</h2>
+       <!-- File List (Right columns) -->
+       <div :class="showUploadArea ? 'lg:col-span-2' : 'lg:col-span-1'">
+          <div class="mb-4 flex items-center justify-between border-b border-[color:var(--border)] pb-2">
+            <h2 class="text-sm font-medium text-[color:var(--text)]">Shared Files</h2>
+            <button
+              v-if="hasFiles && !isUploadPanelOpen"
+              class="text-[12px] font-medium text-[color:var(--muted)] transition-colors hover:text-[color:var(--text)]"
+              @click="openUploadPanel"
+            >
+              Upload Files
+            </button>
+          </div>
 
-         <p v-if="isLoading" class="mt-4 text-[13px] text-[color:var(--muted)]">Loading files...</p>
+          <p v-if="isLoading" class="mt-4 text-[13px] text-[color:var(--muted)]">Loading files...</p>
          <p v-else-if="errorMessage" class="mt-4 text-[13px] text-[color:var(--danger)]">{{ errorMessage }}</p>
 
          <ul v-else-if="space?.files.length" class="mt-4 grid gap-2">
