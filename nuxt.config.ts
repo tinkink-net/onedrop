@@ -22,7 +22,7 @@ export default defineNuxtConfig({
       link: [
         { rel: 'icon', type: 'image/png', href: '/favicon.png' }
       ],
-      script: import.meta.env.PROD ? [
+      script: process.env.NODE_ENV === 'production' ? [
         {
           async: true,
           src: 'https://www.googletagmanager.com/gtag/js?id=G-MN31XGPEXK',
