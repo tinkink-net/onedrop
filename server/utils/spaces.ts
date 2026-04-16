@@ -28,7 +28,7 @@ export function normalizeSlug(value: string) {
 export function assertValidSlug(value: string) {
   const slug = normalizeSlug(value)
   if (!SLUG_REGEX.test(slug)) {
-    throw createError({ statusCode: 400, statusMessage: 'Invalid space slug.' })
+    throw createError({ statusCode: 400, statusMessage: 'Invalid share code.' })
   }
 
   return slug
@@ -114,11 +114,11 @@ export async function requireActiveSpace(bucket: any, slug: string) {
   const meta = await getSpaceMeta(bucket, slug)
 
   if (!meta) {
-    throw createError({ statusCode: 404, statusMessage: 'Space not found.' })
+    throw createError({ statusCode: 404, statusMessage: 'Share not found.' })
   }
 
   if (meta.expiresAt <= Date.now()) {
-    throw createError({ statusCode: 410, statusMessage: 'Space has expired.' })
+    throw createError({ statusCode: 410, statusMessage: 'Share has expired.' })
   }
 
   return meta

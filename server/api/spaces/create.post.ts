@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
   }
 
   if (!slug) {
-    throw createError({ statusCode: 500, statusMessage: 'Failed to generate unique space slug.' })
+    throw createError({ statusCode: 500, statusMessage: 'Failed to generate a unique share code.' })
   }
 
   const now = Date.now()

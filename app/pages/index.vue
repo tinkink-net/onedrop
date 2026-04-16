@@ -109,9 +109,10 @@ async function createSpace() {
     createdSlug.value = response.slug
     recordRecentSpace(response.slug, response.expiresAt)
     await refreshRecentSpaces()
+    await navigateTo(`/${response.slug}`)
   }
   catch (error: any) {
-    errorMessage.value = error?.data?.statusMessage || 'Failed to create space.'
+    errorMessage.value = error?.data?.statusMessage || 'Failed to start sharing.'
   }
   finally {
     isCreating.value = false
@@ -123,7 +124,7 @@ async function joinSpace() {
   joinError.value = ''
 
   if (!slug) {
-    joinError.value = 'Please enter a space slug.'
+    joinError.value = 'Please enter a share code.'
     return
   }
 
@@ -136,7 +137,7 @@ async function joinSpace() {
     navigateTo(`/${slug}`)
   }
   catch (error: any) {
-    joinError.value = error?.data?.statusMessage || 'Space is not available.'
+    joinError.value = error?.data?.statusMessage || 'Share is not available.'
   }
   finally {
     isJoining.value = false
@@ -157,7 +158,7 @@ onMounted(() => {
         <p class="font-mono-brand text-[11px] font-semibold tracking-widest text-[#111]">ONEDROP.TINKCLOUD.COM</p>
       </div>
       <h1 class="mt-8 text-4xl font-medium tracking-tight md:text-5xl">Share files without friction.</h1>
-      <p class="mt-5 max-w-xl text-[15px] leading-relaxed text-[#555]">Temporary spaces that expire automatically. No accounts required. Create a space, drop your files, and collaborate instantly.</p>
+      <p class="mt-5 max-w-xl text-[15px] leading-relaxed text-[#555]">Temporary sharing links that expire automatically. No accounts required. Start sharing, drop your files, and collaborate instantly.</p>
     </header>
 
     <div class="space-y-6">
@@ -166,14 +167,14 @@ onMounted(() => {
       <section class="border border-[color:var(--border)] bg-white p-6 md:p-8">
         <div class="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
           <div class="flex-1">
-             <label class="block font-mono-brand text-[11px] tracking-widest text-[#666] uppercase" for="hours">Space Expiration</label>
+             <label class="block font-mono-brand text-[11px] tracking-widest text-[#666] uppercase" for="hours">Share Expiration</label>
              <div class="mt-3 flex items-center gap-3 border-b border-[color:var(--border)] pb-2 transition-colors focus-within:border-[color:var(--primary)]">
                <input id="hours" v-model.number="hours" type="number" min="1" max="24" class="w-16 bg-transparent text-2xl font-medium outline-none" />
                <span class="text-[15px] text-[#666]">hours</span>
              </div>
           </div>
           <button class="flex items-center gap-2 bg-[color:var(--primary)] px-7 py-3.5 text-sm font-medium text-white transition-colors hover:bg-[color:var(--primary-hover)] disabled:opacity-50" :disabled="isCreating" @click="createSpace">
-            {{ isCreating ? 'Creating...' : 'Create Space' }} <span class="ml-1 font-mono-brand text-xs font-normal">→</span>
+            {{ isCreating ? 'Starting...' : 'Start Sharing' }} <span class="ml-1 font-mono-brand text-xs font-normal">→</span>
           </button>
         </div>
 
@@ -198,10 +199,10 @@ onMounted(() => {
       <!-- Join Action (Triggered) -->
       <section>
         <button v-if="!showJoin" @click="showJoin = true" class="text-[13px] font-medium text-[color:var(--muted)] transition-colors hover:text-[color:var(--text)] underline decoration-[color:var(--border)] underline-offset-4">
-          Have a slug? Join an existing space
+          Have a share code? Join a share
         </button>
         <div v-else class="flex flex-col gap-4 border border-[color:var(--border)] bg-[color:var(--bg-0)] p-6 md:p-8">
-            <label class="block font-mono-brand text-[11px] tracking-widest text-[color:var(--muted)] uppercase" for="slug">Enter Space Slug</label>
+            <label class="block font-mono-brand text-[11px] tracking-widest text-[color:var(--muted)] uppercase" for="slug">Enter Share Code</label>
             <div class="flex flex-col gap-3 sm:flex-row">
               <input id="slug" v-model="slugInput" maxlength="6" placeholder="AB2C3D" class="flex-1 border-b border-[color:var(--border)] bg-transparent px-0 py-2 text-xl font-medium uppercase tracking-[0.1em] outline-none transition-colors focus:border-[color:var(--primary)]" @keyup.enter="joinSpace" />
               <button class="border border-[color:var(--primary)] px-6 py-2.5 text-sm font-medium text-[color:var(--primary)] transition-colors hover:bg-[color:var(--primary)] hover:text-white disabled:opacity-50" :disabled="isJoining" @click="joinSpace">
@@ -215,7 +216,7 @@ onMounted(() => {
       <!-- Recent Spaces -->
       <section v-if="recentSpaces.length" class="mt-20 border-t border-[color:var(--border)] pt-10">
         <div class="mb-6 flex items-center justify-between">
-          <h2 class="text-sm font-medium text-[color:var(--text)]">Recent Spaces</h2>
+          <h2 class="text-sm font-medium text-[color:var(--text)]">Recent Shares</h2>
           <span v-if="isRefreshingRecent" class="font-mono-brand text-[11px] text-[color:var(--muted)]">Syncing...</span>
         </div>
 
