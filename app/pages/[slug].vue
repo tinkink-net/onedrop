@@ -190,16 +190,16 @@ onMounted(loadSpace)
     <section class="grid grid-cols-1 gap-12" :class="showUploadArea ? 'lg:grid-cols-3' : 'lg:grid-cols-1'">
 
         <!-- Upload area (Left column) -->
-        <div v-if="showUploadArea" class="lg:col-span-1">
+        <div v-if="showUploadArea" class="order-1 lg:order-2 lg:col-span-1">
           <div class="mb-4 flex items-center justify-between">
             <h2 class="text-sm font-medium text-[color:var(--text)]">Upload Files</h2>
             <button
               v-if="hasFiles"
-             class="text-[12px] font-medium text-[color:var(--muted)] transition-colors hover:text-[color:var(--text)]"
-             @click="isUploadPanelOpen ? closeUploadPanel() : openUploadPanel()"
-           >
-             {{ isUploadPanelOpen ? 'Close' : 'Upload' }}
-           </button>
+              class="rounded border border-[color:var(--border)] px-2.5 py-1 text-[12px] font-semibold text-[color:var(--muted)] transition-colors hover:border-[color:var(--text)] hover:bg-[color:var(--bg-0)] hover:text-[color:var(--text)]"
+              @click="isUploadPanelOpen ? closeUploadPanel() : openUploadPanel()"
+            >
+              {{ isUploadPanelOpen ? 'Close' : 'Upload' }}
+            </button>
          </div>
          <div v-if="isUploadPanelOpen" class="relative flex cursor-pointer flex-col items-center justify-center border border-dashed border-[color:var(--border)] bg-[color:var(--bg-0)] p-10 text-center transition-colors hover:bg-[color:var(--bg-1)]">
            <input ref="uploadInput" type="file" class="absolute inset-0 cursor-pointer opacity-0" @change="handleFilePickedAndUpload">
@@ -214,12 +214,12 @@ onMounted(loadSpace)
         </div>
 
        <!-- File List (Right columns) -->
-       <div :class="showUploadArea ? 'lg:col-span-2' : 'lg:col-span-1'">
+       <div :class="showUploadArea ? 'order-2 lg:order-1 lg:col-span-2' : 'order-2 lg:order-1 lg:col-span-1'">
           <div class="mb-4 flex items-center justify-between border-b border-[color:var(--border)] pb-2">
             <h2 class="text-sm font-medium text-[color:var(--text)]">Shared Files</h2>
             <button
               v-if="hasFiles && !isUploadPanelOpen"
-              class="text-[12px] font-medium text-[color:var(--muted)] transition-colors hover:text-[color:var(--text)]"
+              class="rounded border border-[color:var(--border)] px-2.5 py-1 text-[12px] font-semibold text-[color:var(--muted)] transition-colors hover:border-[color:var(--text)] hover:bg-[color:var(--bg-0)] hover:text-[color:var(--text)]"
               @click="openUploadPanel"
             >
               Upload Files
