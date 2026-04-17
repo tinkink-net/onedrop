@@ -52,7 +52,13 @@ async function loadSpace() {
     }
   }
   catch (error: any) {
-    errorMessage.value = error?.data?.statusMessage || 'Unable to load this share.'
+    const statusMessage = error?.data?.statusMessage
+    if (statusMessage === 'Invalid share code.') {
+      await navigateTo('/')
+      return
+    }
+
+    errorMessage.value = statusMessage || 'Unable to load this share.'
   }
   finally {
     isLoading.value = false
