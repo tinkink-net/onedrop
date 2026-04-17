@@ -9,6 +9,7 @@ type SpaceData = {
 
 const route = useRoute()
 const slug = computed(() => String(route.params.slug || '').toUpperCase())
+const REDIRECT_HOME_STATUS_CODES = new Set([400, 404])
 
 const isLoading = ref(true)
 const isUploading = ref(false)
@@ -52,12 +53,13 @@ async function loadSpace() {
     }
   }
   catch (error: any) {
-    const statusMessage = error?.data?.statusMessage
-    if (statusMessage === 'Invalid share code.') {
+    const statusCode = error?.statusCode ?? error?.data?.statusCode
+    if (typeof statusCode === 'number' && REDIRECT_HOME_STATUS_CODES.has(statusCode)) {
       await navigateTo('/')
       return
     }
 
+    const statusMessage = error?.data?.statusMessage
     errorMessage.value = statusMessage || 'Unable to load this share.'
   }
   finally {
