@@ -53,8 +53,8 @@ async function loadSpace() {
     }
   }
   catch (error: any) {
-    const statusCode = error?.statusCode ?? error?.data?.statusCode ?? 0
-    if (REDIRECT_HOME_STATUS_CODES.has(statusCode)) {
+    const statusCode = error?.statusCode ?? error?.data?.statusCode
+    if (typeof statusCode === 'number' && REDIRECT_HOME_STATUS_CODES.has(statusCode)) {
       await navigateTo('/')
       return
     }
