@@ -9,7 +9,7 @@ type SpaceData = {
 
 const route = useRoute()
 const slug = computed(() => String(route.params.slug || '').toUpperCase())
-const INVALID_SHARE_CODE_STATUS = 400
+const REDIRECT_HOME_STATUS_CODES = new Set([400, 404])
 
 const isLoading = ref(true)
 const isUploading = ref(false)
@@ -54,7 +54,7 @@ async function loadSpace() {
   }
   catch (error: any) {
     const statusCode = error?.statusCode ?? error?.data?.statusCode ?? 0
-    if (statusCode === INVALID_SHARE_CODE_STATUS) {
+    if (REDIRECT_HOME_STATUS_CODES.has(statusCode)) {
       await navigateTo('/')
       return
     }
