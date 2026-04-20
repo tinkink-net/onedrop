@@ -86,57 +86,96 @@ async function uploadFile() {
   uploadSpeed.value = 0
 
   try {
-    const formData = new FormData()
-    formData.append('file', selectedFile.value)
+    const CHUNK_SIZE = 5 * 1024 * 1024 // 5MB (R2 min size, except for last chunk)
+    const totalSize = selectedFile.value.size
 
-    await new Promise<void>((resolve, reject) => {
-      const xhr = new XMLHttpRequest()
-
-      let lastTime = Date.now()
-      let lastLoaded = 0
-
-      xhr.upload.addEventListener('progress', (event) => {
-        if (event.lengthComputable) {
-          uploadProgress.value = Math.min((event.loaded / event.total) * 100, 99.9)
-
-          const now = Date.now()
-          const timeDiff = (now - lastTime) / 1000
-
-          if (timeDiff >= 0.25) {
-            const loadedDiff = event.loaded - lastLoaded
-            uploadSpeed.value = loadedDiff / timeDiff
-            lastTime = now
-            lastLoaded = event.loaded
-          }
-        }
+    // Natively handled by R2 via Multipart API, single chunk if file is small
+    const startRes = await $fetch<{ ok: boolean; key: string; uploadId: string; uploadedAt: string }>(`/api/spaces/${slug.value}/upload?action=start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: selectedFile.value.name,
+        type: selectedFile.value.type || 'application/octet-stream',
       })
-
-      xhr.addEventListener('load', () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          uploadProgress.value = 100
-          uploadSpeed.value = 0
-          resolve()
-        } else {
-          try {
-            const response = JSON.parse(xhr.responseText)
-            reject(new Error(response.statusMessage || response.message || 'Upload failed.'))
-          } catch {
-            reject(new Error('Upload failed.'))
-          }
-        }
-      })
-
-      xhr.addEventListener('error', () => {
-        reject(new Error('Network error during upload.'))
-      })
-
-      xhr.addEventListener('abort', () => {
-        reject(new Error('Upload aborted.'))
-      })
-
-      xhr.open('POST', `/api/spaces/${slug.value}/upload`)
-      xhr.send(formData)
     })
+
+    if (!startRes.ok) {
+      throw new Error('Failed to start upload.')
+    }
+
+    const { key, uploadId, uploadedAt } = startRes
+    const totalParts = Math.max(1, Math.ceil(totalSize / CHUNK_SIZE))
+    const parts: { partNumber: number; etag: string }[] = []
+
+    let totalLoaded = 0
+    let lastTime = Date.now()
+    let lastLoadedForSpeed = 0
+
+    for (let i = 0; i < totalParts; i++) {
+      const start = i * CHUNK_SIZE
+      const end = Math.min(start + CHUNK_SIZE, totalSize)
+      const chunk = selectedFile.value.slice(start, end)
+
+      const partNumber = i + 1
+      const formData = new FormData()
+      formData.append('chunk', chunk)
+
+      const partRes = await new Promise<{ ok: boolean; partNumber: number; etag: string }>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+
+        xhr.upload.addEventListener('progress', (event) => {
+          if (event.lengthComputable) {
+            const currentLoaded = totalLoaded + event.loaded
+            uploadProgress.value = Math.min((currentLoaded / totalSize) * 100, 99.9)
+
+            const now = Date.now()
+            const timeDiff = (now - lastTime) / 1000
+            if (timeDiff >= 0.25) {
+              const loadedDiff = currentLoaded - lastLoadedForSpeed
+              uploadSpeed.value = loadedDiff / timeDiff
+              lastTime = now
+              lastLoadedForSpeed = currentLoaded
+            }
+          }
+        })
+
+        xhr.addEventListener('load', () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(JSON.parse(xhr.responseText))
+          } else {
+            reject(new Error('Chunk upload failed.'))
+          }
+        })
+
+        xhr.addEventListener('error', () => reject(new Error('Network error during chunk upload.')))
+        xhr.addEventListener('abort', () => reject(new Error('Chunk upload aborted.')))
+
+        xhr.open('POST', `/api/spaces/${slug.value}/upload?action=part&key=${encodeURIComponent(key)}&uploadId=${encodeURIComponent(uploadId)}&partNumber=${partNumber}`)
+        xhr.send(formData)
+      })
+
+      if (!partRes.ok) {
+        throw new Error(`Failed to upload part ${partNumber}.`)
+      }
+
+      parts.push({ partNumber: partRes.partNumber, etag: partRes.etag })
+      totalLoaded += chunk.size
+    }
+
+    await $fetch(`/api/spaces/${slug.value}/upload?action=complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        key,
+        uploadId,
+        parts,
+        name: selectedFile.value.name,
+        uploadedAt
+      })
+    })
+
+    uploadProgress.value = 100
+    uploadSpeed.value = 0
 
     selectedFile.value = null
     if (uploadInput.value) {
