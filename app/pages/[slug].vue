@@ -22,6 +22,9 @@ const uploadInput = ref<HTMLInputElement | null>(null)
 const isUploadPanelOpen = ref(true)
 const isUploadPanelPinnedOpen = ref(false)
 
+const uploadProgress = ref(0)
+const uploadSpeed = ref(0)
+
 const space = ref<SpaceData | null>(null)
 
 const spaceUrl = computed(() => {
@@ -79,14 +82,60 @@ async function uploadFile() {
 
   isUploading.value = true
   uploadError.value = ''
+  uploadProgress.value = 0
+  uploadSpeed.value = 0
 
   try {
     const formData = new FormData()
     formData.append('file', selectedFile.value)
 
-    await $fetch(`/api/spaces/${slug.value}/upload`, {
-      method: 'POST',
-      body: formData
+    await new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+
+      let lastTime = Date.now()
+      let lastLoaded = 0
+
+      xhr.upload.addEventListener('progress', (event) => {
+        if (event.lengthComputable) {
+          uploadProgress.value = Math.min((event.loaded / event.total) * 100, 99.9)
+
+          const now = Date.now()
+          const timeDiff = (now - lastTime) / 1000
+
+          if (timeDiff >= 0.25) {
+            const loadedDiff = event.loaded - lastLoaded
+            uploadSpeed.value = loadedDiff / timeDiff
+            lastTime = now
+            lastLoaded = event.loaded
+          }
+        }
+      })
+
+      xhr.addEventListener('load', () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          uploadProgress.value = 100
+          uploadSpeed.value = 0
+          resolve()
+        } else {
+          try {
+            const response = JSON.parse(xhr.responseText)
+            reject(new Error(response.statusMessage || response.message || 'Upload failed.'))
+          } catch {
+            reject(new Error('Upload failed.'))
+          }
+        }
+      })
+
+      xhr.addEventListener('error', () => {
+        reject(new Error('Network error during upload.'))
+      })
+
+      xhr.addEventListener('abort', () => {
+        reject(new Error('Upload aborted.'))
+      })
+
+      xhr.open('POST', `/api/spaces/${slug.value}/upload`)
+      xhr.send(formData)
     })
 
     selectedFile.value = null
@@ -96,10 +145,12 @@ async function uploadFile() {
     await loadSpace()
   }
   catch (error: any) {
-    uploadError.value = error?.data?.statusMessage || 'Upload failed.'
+    uploadError.value = error?.message || error?.data?.statusMessage || 'Upload failed.'
   }
   finally {
     isUploading.value = false
+    uploadProgress.value = 0
+    uploadSpeed.value = 0
   }
 }
 
@@ -214,8 +265,9 @@ onMounted(loadSpace)
            <span class="mb-2 text-2xl font-light text-[color:var(--muted)]">+</span>
            <span class="text-sm font-medium text-[color:var(--text)]">Click or Drop</span>
            <span class="mt-1 text-[11px] text-[color:var(--muted)]">Any file size limit</span>
-            <div v-if="isUploading" class="absolute inset-0 flex items-center justify-center bg-[color:var(--card)]/90 text-sm font-medium backdrop-blur-sm">
-              Uploading...
+            <div v-if="isUploading" class="absolute inset-0 flex flex-col items-center justify-center bg-[color:var(--card)]/90 backdrop-blur-sm">
+              <div class="mb-2 text-sm font-medium">Uploading... {{ uploadProgress.toFixed(0) }}%</div>
+              <div v-if="uploadSpeed > 0" class="text-[11px] text-[color:var(--muted)]">{{ formatBytes(uploadSpeed) }}/s</div>
             </div>
           </div>
           <p v-if="uploadError" class="mt-3 text-sm text-[color:var(--danger)]">{{ uploadError }}</p>
