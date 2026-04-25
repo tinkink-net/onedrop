@@ -36,26 +36,28 @@ const spaceUrl = computed(() => {
 const hasFiles = computed(() => Boolean(space.value?.files.length))
 const showUploadArea = computed(() => !hasFiles.value || isUploadPanelOpen.value)
 
-watch(spaceUrl, async (value) => {
-  if (!import.meta.client || !value) {
-    qrCodeDataUrl.value = ''
-    return
-  }
+if (import.meta.client) {
+  watch(spaceUrl, async (value) => {
+    if (!value) {
+      qrCodeDataUrl.value = ''
+      return
+    }
 
-  try {
-    qrCodeDataUrl.value = await QRCode.toDataURL(value, {
-      width: 224,
-      margin: 1,
-      color: {
-        dark: '#111827',
-        light: 'transparent'
-      }
-    })
-  }
-  catch {
-    qrCodeDataUrl.value = ''
-  }
-}, { immediate: true })
+    try {
+      qrCodeDataUrl.value = await QRCode.toDataURL(value, {
+        width: 224,
+        margin: 1,
+        color: {
+          dark: '#111827',
+          light: 'transparent'
+        }
+      })
+    }
+    catch {
+      qrCodeDataUrl.value = ''
+    }
+  }, { immediate: true })
+}
 
 watch(hasFiles, (value) => {
   if (!value) {
