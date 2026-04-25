@@ -6,6 +6,15 @@ type SpaceData = {
   expiresAt: number
   files: Array<{ key: string; name: string; size: number; uploadedAt?: string }>
 }
+type QrCodeToDataURL = (text: string, options?: {
+  width?: number
+  margin?: number
+  color?: { dark?: string; light?: string }
+}) => Promise<string>
+type QrCodeModule = {
+  toDataURL?: QrCodeToDataURL
+  default?: { toDataURL?: QrCodeToDataURL }
+}
 
 const route = useRoute()
 const slug = computed(() => String(route.params.slug || '').toUpperCase())
@@ -28,7 +37,8 @@ const uploadSpeed = ref(0)
 
 const space = ref<SpaceData | null>(null)
 const qrCodeDataUrl = ref('')
-const qrCodeToDataURL = ref<((text: string, options?: any) => Promise<string>) | null>(null)
+const qrCodeToDataURL = ref<QrCodeToDataURL | null>(null)
+const qrCodeRequestId = ref(0)
 const stopQrCodeWatch = ref<(() => void) | null>(null)
 
 const spaceUrl = computed(() => {
@@ -75,13 +85,15 @@ async function loadSpace() {
 }
 
 async function updateQrCode(value: string) {
+  const requestId = ++qrCodeRequestId.value
+
   if (!value || !qrCodeToDataURL.value) {
     qrCodeDataUrl.value = ''
     return
   }
 
   try {
-    qrCodeDataUrl.value = await qrCodeToDataURL.value(value, {
+    const dataUrl = await qrCodeToDataURL.value(value, {
       width: QR_CODE_SIZE,
       margin: 1,
       color: {
@@ -89,6 +101,27 @@ async function updateQrCode(value: string) {
         light: 'transparent'
       }
     })
+
+    if (requestId === qrCodeRequestId.value) {
+      qrCodeDataUrl.value = dataUrl
+    }
+  }
+  catch {
+    if (requestId === qrCodeRequestId.value) {
+      qrCodeDataUrl.value = ''
+    }
+  }
+}
+
+async function loadQrLibrary() {
+  try {
+    const qrcodeModule: QrCodeModule = await import('qrcode')
+    const toDataURL = qrcodeModule.toDataURL ?? qrcodeModule.default?.toDataURL
+
+    if (typeof toDataURL === 'function') {
+      qrCodeToDataURL.value = toDataURL
+      await updateQrCode(spaceUrl.value)
+    }
   }
   catch {
     qrCodeDataUrl.value = ''
@@ -278,26 +311,12 @@ function closeUploadPanel() {
 }
 
 onMounted(() => {
-  stopQrCodeWatch.value = watch(spaceUrl, async (value) => {
-    await updateQrCode(value)
+  stopQrCodeWatch.value = watch(spaceUrl, (value) => {
+    void updateQrCode(value)
   })
 
   loadSpace()
-
-  void (async () => {
-    try {
-      const qrcodeModule = await import('qrcode')
-      const toDataURL = (qrcodeModule as any).toDataURL ?? (qrcodeModule as any).default?.toDataURL
-
-      if (typeof toDataURL === 'function') {
-        qrCodeToDataURL.value = toDataURL
-        await updateQrCode(spaceUrl.value)
-      }
-    }
-    catch {
-      qrCodeDataUrl.value = ''
-    }
-  })()
+  void loadQrLibrary()
 })
 
 onUnmounted(() => {
