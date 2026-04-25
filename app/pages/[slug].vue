@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import QRCode from 'qrcode'
-
 type SpaceData = {
   slug: string
   url: string
@@ -30,6 +28,7 @@ const uploadSpeed = ref(0)
 
 const space = ref<SpaceData | null>(null)
 const qrCodeDataUrl = ref('')
+const qrCodeToDataURL = ref<((text: string, options?: any) => Promise<string>) | null>(null)
 const stopQrCodeWatch = ref<(() => void) | null>(null)
 
 const spaceUrl = computed(() => {
@@ -76,13 +75,13 @@ async function loadSpace() {
 }
 
 async function updateQrCode(value: string) {
-  if (!value) {
+  if (!value || !qrCodeToDataURL.value) {
     qrCodeDataUrl.value = ''
     return
   }
 
   try {
-    qrCodeDataUrl.value = await QRCode.toDataURL(value, {
+    qrCodeDataUrl.value = await qrCodeToDataURL.value(value, {
       width: QR_CODE_SIZE,
       margin: 1,
       color: {
@@ -284,6 +283,21 @@ onMounted(() => {
   }, { immediate: true })
 
   loadSpace()
+
+  void (async () => {
+    try {
+      const qrcodeModule = await import('qrcode')
+      const toDataURL = (qrcodeModule as any).toDataURL ?? (qrcodeModule as any).default?.toDataURL
+
+      if (typeof toDataURL === 'function') {
+        qrCodeToDataURL.value = toDataURL
+        await updateQrCode(spaceUrl.value)
+      }
+    }
+    catch {
+      qrCodeDataUrl.value = ''
+    }
+  })()
 })
 
 onUnmounted(() => {
