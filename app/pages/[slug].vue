@@ -326,36 +326,35 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <main class="relative mx-auto flex min-h-full w-full max-w-4xl flex-col px-6 py-10 md:py-16 text-[color:var(--text)] flex-1">
+  <main class="relative mx-auto flex min-h-full w-full max-w-4xl flex-col px-6 py-6 md:py-12 text-[color:var(--text)] flex-1">
 
     <nav class="mb-12 flex items-center justify-between">
       <NuxtLink to="/" class="flex items-center gap-2 text-sm font-medium text-[color:var(--muted)] hover:text-[color:var(--text)] transition-colors">
         <span class="font-mono-brand">←</span> Home
       </NuxtLink>
-      <div v-if="space" class="font-mono-brand text-[11px] text-[color:var(--muted)] uppercase tracking-widest">
-         Expires {{ formatTimeWithRelative(space.expiresAt) }}
-      </div>
     </nav>
 
     <header class="mb-14 border-b border-[color:var(--border)] pb-8">
-      <div class="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
-        <div>
-           <p class="font-mono-brand text-[11px] uppercase tracking-widest text-[color:var(--muted)]">Share code</p>
-           <h1 class="mt-2 text-5xl font-medium tracking-tight">{{ slug }}</h1>
+      <div class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+        <div class="flex flex-col gap-3">
+          <p class="font-mono-brand text-[11px] uppercase tracking-widest text-[color:var(--muted)]">Share code</p>
+          <h1 class="text-5xl font-medium tracking-tight">{{ slug }}</h1>
+          <div class="flex flex-col gap-3">
+            <div v-if="space" class="font-mono-brand text-[11px] text-[color:var(--muted)] uppercase tracking-widest">
+              Expires {{ formatTimeWithRelative(space.expiresAt) }}
+            </div>
+            <div v-if="spaceUrl" class="flex items-center gap-3">
+              <span class="rounded-md bg-[color:var(--bg-0)] py-1 text-[11px] font-mono-brand text-[color:var(--muted)]">
+                {{ spaceUrl }}
+              </span>
+              <button @click="copySpaceUrl" class="text-sm font-medium hover:underline underline-offset-4 disabled:opacity-50" :disabled="isCopying">
+                 {{ copyStatus || 'Copy Link' }}
+              </button>
+            </div>
+          </div>
         </div>
-        <div v-if="spaceUrl" class="flex flex-col items-start gap-4 md:items-end">
-          <div class="flex items-center gap-3">
-            <span class="rounded-md bg-[color:var(--bg-0)] px-3 py-1 text-[11px] font-mono-brand text-[color:var(--muted)] md:inline-flex">
-              {{ spaceUrl }}
-            </span>
-            <button @click="copySpaceUrl" class="text-sm font-medium hover:underline underline-offset-4 disabled:opacity-50" :disabled="isCopying">
-               {{ copyStatus || 'Copy Link' }}
-            </button>
-          </div>
-          <div v-if="qrCodeDataUrl" class="hidden lg:flex flex-col items-center gap-2 rounded-lg border border-[color:var(--border)] bg-[color:var(--bg-0)] p-3">
-            <p id="share-qr-label" class="font-mono-brand text-[10px] uppercase tracking-widest text-[color:var(--muted)]">Scan to open</p>
-            <img :src="qrCodeDataUrl" alt="QR code for share link" aria-labelledby="share-qr-label" :width="QR_CODE_SIZE" :height="QR_CODE_SIZE" class="rounded bg-white p-2">
-          </div>
+        <div v-if="qrCodeDataUrl" class="hidden lg:block absolute top-6 md:top-12 right-6">
+          <img :src="qrCodeDataUrl" alt="QR code for share link" :width="QR_CODE_SIZE" :height="QR_CODE_SIZE" class="rounded bg-white">
         </div>
       </div>
     </header>
