@@ -36,7 +36,7 @@ export default defineEventHandler(async (event) => {
 
   const host = getRequestHeader(event, 'host')
   const protocol = host?.includes('localhost') ? 'http' : 'https'
-  const origin = host ? `${protocol}://${host}` : 'https://onedrop.tinkcloud.com'
+  const origin = host ? `${protocol}://${host}` : 'https://0x1.one'
 
   return {
     slug,

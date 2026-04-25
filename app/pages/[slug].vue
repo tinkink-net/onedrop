@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import QRCode from 'qrcode'
+
 type SpaceData = {
   slug: string
   url: string
@@ -26,12 +28,34 @@ const uploadProgress = ref(0)
 const uploadSpeed = ref(0)
 
 const space = ref<SpaceData | null>(null)
+const qrCodeDataUrl = ref('')
 
 const spaceUrl = computed(() => {
   return space.value?.url || ''
 })
 const hasFiles = computed(() => Boolean(space.value?.files.length))
 const showUploadArea = computed(() => !hasFiles.value || isUploadPanelOpen.value)
+
+watch(spaceUrl, async (value) => {
+  if (!import.meta.client || !value) {
+    qrCodeDataUrl.value = ''
+    return
+  }
+
+  try {
+    qrCodeDataUrl.value = await QRCode.toDataURL(value, {
+      width: 224,
+      margin: 1,
+      color: {
+        dark: '#111827',
+        light: '#0000'
+      }
+    })
+  }
+  catch {
+    qrCodeDataUrl.value = ''
+  }
+}, { immediate: true })
 
 watch(hasFiles, (value) => {
   if (!value) {
@@ -268,19 +292,24 @@ onMounted(loadSpace)
     </nav>
 
     <header class="mb-14 border-b border-[color:var(--border)] pb-8">
-      <div class="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+      <div class="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
         <div>
            <p class="font-mono-brand text-[11px] uppercase tracking-widest text-[color:var(--muted)]">Share code</p>
            <h1 class="mt-2 text-5xl font-medium tracking-tight">{{ slug }}</h1>
         </div>
-        <div v-if="spaceUrl" class="flex items-center gap-3">
-          <!-- show space url -->
-          <span class="rounded-md bg-[color:var(--bg-0)] px-3 py-1 text-[11px] font-mono-brand text-[color:var(--muted)] md:inline-flex">
-            {{ spaceUrl }}
-          </span>
-          <button @click="copySpaceUrl" class="text-sm font-medium hover:underline underline-offset-4 disabled:opacity-50" :disabled="isCopying">
-             {{ copyStatus || 'Copy Link' }}
-          </button>
+        <div v-if="spaceUrl" class="flex flex-col items-start gap-4 md:items-end">
+          <div class="flex items-center gap-3">
+            <span class="rounded-md bg-[color:var(--bg-0)] px-3 py-1 text-[11px] font-mono-brand text-[color:var(--muted)] md:inline-flex">
+              {{ spaceUrl }}
+            </span>
+            <button @click="copySpaceUrl" class="text-sm font-medium hover:underline underline-offset-4 disabled:opacity-50" :disabled="isCopying">
+               {{ copyStatus || 'Copy Link' }}
+            </button>
+          </div>
+          <div v-if="qrCodeDataUrl" class="hidden lg:flex flex-col items-center gap-2 rounded-lg border border-[color:var(--border)] bg-[color:var(--bg-0)] p-3">
+            <p class="font-mono-brand text-[10px] uppercase tracking-widest text-[color:var(--muted)]">Scan to open</p>
+            <img :src="qrCodeDataUrl" alt="QR code for share link" class="h-56 w-56 rounded bg-white p-2">
+          </div>
         </div>
       </div>
     </header>
