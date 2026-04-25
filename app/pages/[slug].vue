@@ -280,7 +280,7 @@ function closeUploadPanel() {
 onMounted(() => {
   stopQrCodeWatch.value = watch(spaceUrl, async (value) => {
     await updateQrCode(value)
-  }, { immediate: true })
+  })
 
   loadSpace()
 
@@ -335,7 +335,7 @@ onUnmounted(() => {
           </div>
           <div v-if="qrCodeDataUrl" class="hidden lg:flex flex-col items-center gap-2 rounded-lg border border-[color:var(--border)] bg-[color:var(--bg-0)] p-3">
             <p id="share-qr-label" class="font-mono-brand text-[10px] uppercase tracking-widest text-[color:var(--muted)]">Scan to open</p>
-            <img :src="qrCodeDataUrl" alt="QR code for share link" aria-labelledby="share-qr-label" :width="QR_CODE_SIZE" :height="QR_CODE_SIZE" class="rounded bg-white p-2" :style="{ width: `${QR_CODE_SIZE}px`, height: `${QR_CODE_SIZE}px` }">
+            <img :src="qrCodeDataUrl" alt="QR code for share link" aria-labelledby="share-qr-label" :width="QR_CODE_SIZE" :height="QR_CODE_SIZE" class="rounded bg-white p-2">
           </div>
         </div>
       </div>
