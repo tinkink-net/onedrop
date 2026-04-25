@@ -24,6 +24,11 @@ const showJoin = ref(false)
 const copyStatus = ref('')
 const recentSpaces = ref<RecentSpace[]>([])
 const isRefreshingRecent = ref(false)
+const requestUrl = useRequestURL()
+
+const currentHostLabel = computed(() => {
+  return requestUrl.host ? requestUrl.host.toUpperCase() : 'ONEDROP'
+})
 
 function normalizeInputSlug(value: string) {
   return value.trim().toUpperCase()
@@ -105,7 +110,8 @@ async function createSpace() {
       }
     })
 
-    createdUrl.value = response.url
+    const clientOrigin = typeof window !== 'undefined' ? window.location.origin : ''
+    createdUrl.value = clientOrigin ? `${clientOrigin}/${response.slug}` : response.url
     createdSlug.value = response.slug
     recordRecentSpace(response.slug, response.expiresAt)
     await refreshRecentSpaces()
@@ -155,7 +161,7 @@ onMounted(() => {
     <header class="mb-14">
       <div class="flex items-center gap-3">
         <div class="h-3 w-3 bg-[#111] rounded-sm"></div>
-        <p class="font-mono-brand text-[11px] font-semibold tracking-widest text-[#111]">ONEDROP.TINKCLOUD.COM</p>
+        <p class="font-mono-brand text-[11px] font-semibold tracking-widest text-[#111]">{{ currentHostLabel }}</p>
       </div>
       <h1 class="mt-8 text-4xl font-medium tracking-tight md:text-5xl">Share files without friction.</h1>
       <p class="mt-5 max-w-xl text-[15px] leading-relaxed text-[#555]">Temporary sharing links that expire automatically. No accounts required. Start sharing, drop your files, and collaborate instantly.</p>

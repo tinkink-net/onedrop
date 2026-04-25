@@ -6,10 +6,20 @@ type SpaceData = {
   expiresAt: number
   files: Array<{ key: string; name: string; size: number; uploadedAt?: string }>
 }
+type QrCodeToDataURL = (text: string, options?: {
+  width?: number
+  margin?: number
+  color?: { dark?: string; light?: string }
+}) => Promise<string>
+type QrCodeModule = {
+  toDataURL?: QrCodeToDataURL
+  default?: { toDataURL?: QrCodeToDataURL }
+}
 
 const route = useRoute()
 const slug = computed(() => String(route.params.slug || '').toUpperCase())
 const REDIRECT_HOME_STATUS_CODES = new Set([400, 404])
+const QR_CODE_SIZE = 224
 
 const isLoading = ref(true)
 const isUploading = ref(false)
@@ -26,6 +36,10 @@ const uploadProgress = ref(0)
 const uploadSpeed = ref(0)
 
 const space = ref<SpaceData | null>(null)
+const qrCodeDataUrl = ref('')
+const qrCodeToDataURL = ref<QrCodeToDataURL | null>(null)
+const qrCodeRequestId = ref(0)
+const stopQrCodeWatch = ref<(() => void) | null>(null)
 
 const spaceUrl = computed(() => {
   return space.value?.url || ''
@@ -67,6 +81,50 @@ async function loadSpace() {
   }
   finally {
     isLoading.value = false
+  }
+}
+
+async function updateQrCode(value: string) {
+  const requestId = ++qrCodeRequestId.value
+
+  if (!value || !qrCodeToDataURL.value) {
+    qrCodeDataUrl.value = ''
+    return
+  }
+
+  try {
+    const dataUrl = await qrCodeToDataURL.value(value, {
+      width: QR_CODE_SIZE,
+      margin: 1,
+      color: {
+        dark: '#111827',
+        light: '#0000'
+      }
+    })
+
+    if (requestId === qrCodeRequestId.value) {
+      qrCodeDataUrl.value = dataUrl
+    }
+  }
+  catch {
+    if (requestId === qrCodeRequestId.value) {
+      qrCodeDataUrl.value = ''
+    }
+  }
+}
+
+async function loadQrLibrary() {
+  try {
+    const qrcodeModule: QrCodeModule = await import('qrcode')
+    const toDataURL = qrcodeModule.toDataURL ?? qrcodeModule.default?.toDataURL
+
+    if (typeof toDataURL === 'function') {
+      qrCodeToDataURL.value = toDataURL
+      await updateQrCode(spaceUrl.value)
+    }
+  }
+  catch {
+    qrCodeDataUrl.value = ''
   }
 }
 
@@ -252,35 +310,51 @@ function closeUploadPanel() {
   isUploadPanelPinnedOpen.value = false
 }
 
-onMounted(loadSpace)
+onMounted(() => {
+  stopQrCodeWatch.value = watch(spaceUrl, (value) => {
+    void updateQrCode(value)
+  }, { immediate: true })
+
+  loadSpace()
+  void loadQrLibrary()
+})
+
+onUnmounted(() => {
+  stopQrCodeWatch.value?.()
+  stopQrCodeWatch.value = null
+})
 </script>
 
 <template>
-  <main class="relative mx-auto flex min-h-full w-full max-w-4xl flex-col px-6 py-10 md:py-16 text-[color:var(--text)] flex-1">
+  <main class="relative mx-auto flex min-h-full w-full max-w-4xl flex-col px-6 py-6 md:py-12 text-[color:var(--text)] flex-1">
 
     <nav class="mb-12 flex items-center justify-between">
       <NuxtLink to="/" class="flex items-center gap-2 text-sm font-medium text-[color:var(--muted)] hover:text-[color:var(--text)] transition-colors">
         <span class="font-mono-brand">←</span> Home
       </NuxtLink>
-      <div v-if="space" class="font-mono-brand text-[11px] text-[color:var(--muted)] uppercase tracking-widest">
-         Expires {{ formatTimeWithRelative(space.expiresAt) }}
-      </div>
     </nav>
 
     <header class="mb-14 border-b border-[color:var(--border)] pb-8">
-      <div class="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
-        <div>
-           <p class="font-mono-brand text-[11px] uppercase tracking-widest text-[color:var(--muted)]">Share code</p>
-           <h1 class="mt-2 text-5xl font-medium tracking-tight">{{ slug }}</h1>
+      <div class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+        <div class="flex flex-col gap-3">
+          <p class="font-mono-brand text-[11px] uppercase tracking-widest text-[color:var(--muted)]">Share code</p>
+          <h1 class="text-5xl font-medium tracking-tight">{{ slug }}</h1>
+          <div class="flex flex-col gap-3">
+            <div v-if="space" class="font-mono-brand text-[11px] text-[color:var(--muted)] uppercase tracking-widest">
+              Expires {{ formatTimeWithRelative(space.expiresAt) }}
+            </div>
+            <div v-if="spaceUrl" class="flex items-center gap-3">
+              <span class="rounded-md bg-[color:var(--bg-0)] py-1 text-[11px] font-mono-brand text-[color:var(--muted)]">
+                {{ spaceUrl }}
+              </span>
+              <button @click="copySpaceUrl" class="text-sm font-medium hover:underline underline-offset-4 disabled:opacity-50" :disabled="isCopying">
+                 {{ copyStatus || 'Copy Link' }}
+              </button>
+            </div>
+          </div>
         </div>
-        <div v-if="spaceUrl" class="flex items-center gap-3">
-          <!-- show space url -->
-          <span class="rounded-md bg-[color:var(--bg-0)] px-3 py-1 text-[11px] font-mono-brand text-[color:var(--muted)] md:inline-flex">
-            {{ spaceUrl }}
-          </span>
-          <button @click="copySpaceUrl" class="text-sm font-medium hover:underline underline-offset-4 disabled:opacity-50" :disabled="isCopying">
-             {{ copyStatus || 'Copy Link' }}
-          </button>
+        <div v-if="qrCodeDataUrl" class="hidden lg:block absolute top-6 md:top-12 right-6">
+          <img :src="qrCodeDataUrl" alt="QR code for share link" :width="QR_CODE_SIZE" :height="QR_CODE_SIZE" class="rounded bg-white">
         </div>
       </div>
     </header>
