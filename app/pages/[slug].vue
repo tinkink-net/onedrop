@@ -98,7 +98,7 @@ async function updateQrCode(value: string) {
       margin: 1,
       color: {
         dark: '#111827',
-        light: 'transparent'
+        light: '#0000'
       }
     })
 
