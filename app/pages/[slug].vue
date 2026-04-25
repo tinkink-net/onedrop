@@ -12,6 +12,7 @@ type SpaceData = {
 const route = useRoute()
 const slug = computed(() => String(route.params.slug || '').toUpperCase())
 const REDIRECT_HOME_STATUS_CODES = new Set([400, 404])
+const QR_CODE_SIZE = 224
 
 const isLoading = ref(true)
 const isUploading = ref(false)
@@ -29,6 +30,7 @@ const uploadSpeed = ref(0)
 
 const space = ref<SpaceData | null>(null)
 const qrCodeDataUrl = ref('')
+let stopQrCodeWatch: (() => void) | null = null
 
 const spaceUrl = computed(() => {
   return space.value?.url || ''
@@ -36,28 +38,6 @@ const spaceUrl = computed(() => {
 const hasFiles = computed(() => Boolean(space.value?.files.length))
 const showUploadArea = computed(() => !hasFiles.value || isUploadPanelOpen.value)
 
-if (import.meta.client) {
-  watch(spaceUrl, async (value) => {
-    if (!value) {
-      qrCodeDataUrl.value = ''
-      return
-    }
-
-    try {
-      qrCodeDataUrl.value = await QRCode.toDataURL(value, {
-        width: 224,
-        margin: 1,
-        color: {
-          dark: '#111827',
-          light: 'transparent'
-        }
-      })
-    }
-    catch {
-      qrCodeDataUrl.value = ''
-    }
-  }, { immediate: true })
-}
 
 watch(hasFiles, (value) => {
   if (!value) {
@@ -278,7 +258,35 @@ function closeUploadPanel() {
   isUploadPanelPinnedOpen.value = false
 }
 
-onMounted(loadSpace)
+onMounted(() => {
+  stopQrCodeWatch = watch(spaceUrl, async (value) => {
+    if (!value) {
+      qrCodeDataUrl.value = ''
+      return
+    }
+
+    try {
+      qrCodeDataUrl.value = await QRCode.toDataURL(value, {
+        width: QR_CODE_SIZE,
+        margin: 1,
+        color: {
+          dark: '#111827',
+          light: 'transparent'
+        }
+      })
+    }
+    catch {
+      qrCodeDataUrl.value = ''
+    }
+  }, { immediate: true })
+
+  loadSpace()
+})
+
+onUnmounted(() => {
+  stopQrCodeWatch?.()
+  stopQrCodeWatch = null
+})
 </script>
 
 <template>
@@ -310,7 +318,7 @@ onMounted(loadSpace)
           </div>
           <div v-if="qrCodeDataUrl" class="hidden lg:flex flex-col items-center gap-2 rounded-lg border border-[color:var(--border)] bg-[color:var(--bg-0)] p-3">
             <p id="share-qr-label" class="font-mono-brand text-[10px] uppercase tracking-widest text-[color:var(--muted)]">Scan to open</p>
-            <img :src="qrCodeDataUrl" alt="QR code for share link" aria-labelledby="share-qr-label" class="h-56 w-56 rounded bg-white p-2">
+            <img :src="qrCodeDataUrl" alt="QR code for share link" aria-labelledby="share-qr-label" class="rounded bg-white p-2" :style="{ width: `${QR_CODE_SIZE}px`, height: `${QR_CODE_SIZE}px` }">
           </div>
         </div>
       </div>
