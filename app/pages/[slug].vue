@@ -30,7 +30,7 @@ const uploadSpeed = ref(0)
 
 const space = ref<SpaceData | null>(null)
 const qrCodeDataUrl = ref('')
-let stopQrCodeWatch: (() => void) | null = null
+const stopQrCodeWatch = ref<(() => void) | null>(null)
 
 const spaceUrl = computed(() => {
   return space.value?.url || ''
@@ -258,7 +258,7 @@ function closeUploadPanel() {
 }
 
 onMounted(() => {
-  stopQrCodeWatch = watch(spaceUrl, async (value) => {
+  stopQrCodeWatch.value = watch(spaceUrl, async (value) => {
     if (!value) {
       qrCodeDataUrl.value = ''
       return
@@ -283,8 +283,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  stopQrCodeWatch?.()
-  stopQrCodeWatch = null
+  stopQrCodeWatch.value?.()
+  stopQrCodeWatch.value = null
 })
 </script>
 
@@ -317,7 +317,7 @@ onUnmounted(() => {
           </div>
           <div v-if="qrCodeDataUrl" class="hidden lg:flex flex-col items-center gap-2 rounded-lg border border-[color:var(--border)] bg-[color:var(--bg-0)] p-3">
             <p id="share-qr-label" class="font-mono-brand text-[10px] uppercase tracking-widest text-[color:var(--muted)]">Scan to open</p>
-            <img :src="qrCodeDataUrl" alt="" aria-labelledby="share-qr-label" class="rounded bg-white p-2" :style="{ width: `${QR_CODE_SIZE}px`, height: `${QR_CODE_SIZE}px` }">
+            <img :src="qrCodeDataUrl" alt="QR code for share link" aria-labelledby="share-qr-label" class="rounded bg-white p-2" :style="{ width: `${QR_CODE_SIZE}px`, height: `${QR_CODE_SIZE}px` }">
           </div>
         </div>
       </div>
