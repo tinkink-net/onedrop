@@ -48,7 +48,7 @@ watch(spaceUrl, async (value) => {
       margin: 1,
       color: {
         dark: '#111827',
-        light: '#0000'
+        light: 'transparent'
       }
     })
   }
@@ -308,7 +308,7 @@ onMounted(loadSpace)
           </div>
           <div v-if="qrCodeDataUrl" class="hidden lg:flex flex-col items-center gap-2 rounded-lg border border-[color:var(--border)] bg-[color:var(--bg-0)] p-3">
             <p class="font-mono-brand text-[10px] uppercase tracking-widest text-[color:var(--muted)]">Scan to open</p>
-            <img :src="qrCodeDataUrl" alt="QR code for share link" aria-label="QR code for share link" class="h-56 w-56 rounded bg-white p-2">
+            <img :src="qrCodeDataUrl" alt="QR code for share link" class="h-56 w-56 rounded bg-white p-2">
           </div>
         </div>
       </div>
