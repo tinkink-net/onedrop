@@ -313,7 +313,7 @@ function closeUploadPanel() {
 onMounted(() => {
   stopQrCodeWatch.value = watch(spaceUrl, (value) => {
     void updateQrCode(value)
-  })
+  }, { immediate: true })
 
   loadSpace()
   void loadQrLibrary()
