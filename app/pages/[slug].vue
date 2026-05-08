@@ -48,6 +48,7 @@ const isSpaceRequestInFlight = ref(false)
 const autoRefreshTimer = ref<number | null>(null)
 const refreshTierIndex = ref(0)
 const lastActiveAt = ref(Date.now())
+const lastActivityScheduleAt = ref(0)
 
 const spaceUrl = computed(() => {
   return space.value?.url || ''
@@ -418,6 +419,11 @@ function scheduleAutoRefresh() {
 
   const refreshDelay = REFRESH_INTERVALS[refreshTierIndex.value]
   autoRefreshTimer.value = window.setTimeout(async () => {
+    if (isSpaceRequestInFlight.value) {
+      scheduleAutoRefresh()
+      return
+    }
+
     const changed = await loadSpace({ background: true })
     updateRefreshTier(changed)
     scheduleAutoRefresh()
@@ -425,6 +431,11 @@ function scheduleAutoRefresh() {
 }
 
 function handleInteractionActivity() {
+  if (Date.now() - lastActivityScheduleAt.value < 1000) {
+    return
+  }
+
+  lastActivityScheduleAt.value = Date.now()
   markRefreshActive()
   scheduleAutoRefresh()
 }

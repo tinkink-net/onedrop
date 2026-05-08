@@ -45,8 +45,8 @@ function decodeLatin1Mojibake(value: string) {
 
   try {
     const bytes = new Uint8Array(value.length)
-    for (let index = 0; index < value.length; index++) {
-      bytes[index] = value.charCodeAt(index)
+    for (let byteIndex = 0; byteIndex < value.length; byteIndex++) {
+      bytes[byteIndex] = value.charCodeAt(byteIndex)
     }
     const decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes).trim()
     return decoded || value
