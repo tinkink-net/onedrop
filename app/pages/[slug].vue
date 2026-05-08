@@ -31,6 +31,7 @@ const errorMessage = ref('')
 const uploadError = ref('')
 const selectedFile = ref<File | null>(null)
 const copyStatus = ref('')
+const copyEmailStatus = ref('')
 const uploadInput = ref<HTMLInputElement | null>(null)
 const isUploadPanelOpen = ref(true)
 const isUploadPanelPinnedOpen = ref(false)
@@ -76,10 +77,8 @@ function getFilesFingerprint(files: SpaceData['files'] = []) {
 }
 
 function clearAutoRefreshTimer() {
-  if (autoRefreshTimer.value !== null) {
-    window.clearTimeout(autoRefreshTimer.value)
-    autoRefreshTimer.value = null
-  }
+  window.clearTimeout(autoRefreshTimer.value ?? undefined)
+  autoRefreshTimer.value = null
 }
 
 function isDocumentHidden() {
@@ -365,6 +364,26 @@ async function copySpaceUrl() {
   }
 }
 
+async function copyEmailUploadAddress() {
+  if (!emailUploadAddress.value) {
+    return
+  }
+
+  try {
+    await navigator.clipboard.writeText(emailUploadAddress.value)
+    copyEmailStatus.value = 'Copied'
+    window.setTimeout(() => {
+      copyEmailStatus.value = ''
+    }, 1600)
+  }
+  catch {
+    copyEmailStatus.value = 'Copy failed'
+    window.setTimeout(() => {
+      copyEmailStatus.value = ''
+    }, 1600)
+  }
+}
+
 function openSpaceInNewTab() {
   if (!spaceUrl.value) {
     return
@@ -479,9 +498,13 @@ onUnmounted(() => {
                  {{ copyStatus || 'Copy Link' }}
               </button>
             </div>
-            <p v-if="spaceUrl" class="text-[11px] text-[color:var(--muted)]">
-              Upload by email: <span class="font-mono-brand text-[color:var(--text)]">{{ emailUploadAddress }}</span>
-            </p>
+            <div v-if="spaceUrl" class="flex items-center gap-2 text-[11px] text-[color:var(--muted)]">
+              <span>Upload by email:</span>
+              <span class="font-mono-brand text-[color:var(--text)]">{{ emailUploadAddress }}</span>
+              <button class="text-[11px] font-medium hover:underline underline-offset-4" @click="copyEmailUploadAddress">
+                {{ copyEmailStatus || 'Copy' }}
+              </button>
+            </div>
           </div>
         </div>
         <div v-if="qrCodeDataUrl" class="hidden lg:block absolute top-6 md:top-12 right-6">
