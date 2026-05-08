@@ -76,10 +76,14 @@ function getFilesFingerprint(files: SpaceData['files'] = []) {
 }
 
 function clearAutoRefreshTimer() {
-  if (autoRefreshTimer.value !== null && typeof window !== 'undefined') {
+  if (autoRefreshTimer.value !== null) {
     window.clearTimeout(autoRefreshTimer.value)
     autoRefreshTimer.value = null
   }
+}
+
+function isDocumentHidden() {
+  return typeof document !== 'undefined' && document.hidden
 }
 
 function markRefreshActive() {
@@ -93,7 +97,7 @@ function updateRefreshTier(changed: boolean) {
     return
   }
 
-  if (typeof document !== 'undefined' && document.hidden) {
+  if (isDocumentHidden()) {
     refreshTierIndex.value = Math.min(refreshTierIndex.value + 2, REFRESH_INTERVALS.length - 1)
     return
   }
@@ -407,7 +411,7 @@ function handleInteractionActivity() {
 }
 
 function handleVisibilityChange() {
-  if (typeof document !== 'undefined' && !document.hidden) {
+  if (!isDocumentHidden()) {
     void refreshFilesNow()
     return
   }
@@ -429,7 +433,7 @@ onMounted(() => {
 
   if (typeof window !== 'undefined') {
     window.addEventListener('pointerdown', handleInteractionActivity, { passive: true })
-    window.addEventListener('keydown', handleInteractionActivity)
+    window.addEventListener('keydown', handleInteractionActivity, { passive: true })
     window.addEventListener('focus', handleInteractionActivity)
     document.addEventListener('visibilitychange', handleVisibilityChange)
   }
