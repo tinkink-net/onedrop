@@ -1,4 +1,4 @@
-import PostalMime from 'postal-mime'
+import PostalMime, { decodeWords } from 'postal-mime'
 import { assertValidSlug, getFileObjectKey, getSpaceMeta, sanitizeFilename, saveSpaceFileMeta } from '../utils/spaces'
 
 type CloudflareEmailHookPayload = {
@@ -38,9 +38,63 @@ function normalizeEmailTextContent(text?: string, html?: string) {
   return (text ?? fallbackText).trim()
 }
 
+function decodeLatin1Mojibake(value: string) {
+  if (!/^[\u0000-\u00FF]+$/.test(value) || !/[\u0080-\u00FF]/.test(value)) {
+    return value
+  }
+
+  try {
+    const bytes = new Uint8Array(value.length)
+    for (let i = 0; i < value.length; i++) {
+      bytes[i] = value.charCodeAt(i)
+    }
+    const decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes).trim()
+    return decoded || value
+  }
+  catch {
+    return value
+  }
+}
+
+function decodeAttachmentFilename(rawFilename?: string | null) {
+  const source = (rawFilename || '').trim()
+  if (!source) {
+    return null
+  }
+
+  let decoded = source
+
+  try {
+    decoded = decodeWords(decoded)
+  }
+  catch {}
+
+  const rfc5987 = decoded.match(/^[A-Za-z0-9_-]+'[^']*'(.+)$/)
+  if (rfc5987) {
+    try {
+      decoded = decodeURIComponent(rfc5987[1])
+    }
+    catch {}
+  }
+  else if (/%[0-9A-Fa-f]{2}/.test(decoded)) {
+    try {
+      decoded = decodeURIComponent(decoded)
+    }
+    catch {}
+  }
+
+  return decodeLatin1Mojibake(decoded)
+}
+
 function getSpaceSlugFromRecipient(to: string) {
-  const trimmed = (to || '').trim().toLowerCase()
-  const [localPart, domain] = trimmed.split('@')
+  const trimmed = (to || '').trim()
+  const separatorIndex = trimmed.lastIndexOf('@')
+  if (separatorIndex <= 0) {
+    return null
+  }
+
+  const localPart = trimmed.slice(0, separatorIndex)
+  const domain = trimmed.slice(separatorIndex + 1).toLowerCase()
 
   if (!localPart || domain !== '0x1.one') {
     return null
@@ -115,7 +169,8 @@ export default defineNitroPlugin((nitroApp) => {
     const attachments = parsedEmail.attachments || []
 
     for (const attachment of attachments) {
-      const baseName = attachment.filename || `attachment-${crypto.randomUUID()}.dat`
+      const decodedAttachmentName = decodeAttachmentFilename(attachment.filename)
+      const baseName = decodedAttachmentName || `attachment-${crypto.randomUUID()}.dat`
       const filename = sanitizeFilename(baseName)
       const contentType = attachment.mimeType || 'application/octet-stream'
       const content = toArrayBuffer(attachment.content as ArrayBuffer | Uint8Array | string)

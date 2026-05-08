@@ -35,7 +35,15 @@ export function assertValidSlug(value: string) {
 }
 
 export function sanitizeFilename(name: string) {
-  return name.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 120) || 'file'
+  const sanitized = name
+    .normalize('NFKC')
+    .replace(/[\u0000-\u001F\u007F]/g, '')
+    .replace(/[\r\n]/g, ' ')
+    .replace(/[\/\\]/g, '_')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  return sanitized.slice(0, 120) || 'file'
 }
 
 export function generateSlug() {

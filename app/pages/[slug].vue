@@ -20,14 +20,20 @@ const route = useRoute()
 const slug = computed(() => String(route.params.slug || '').toUpperCase())
 const REDIRECT_HOME_STATUS_CODES = new Set([400, 404])
 const QR_CODE_SIZE = 224
+const REFRESH_INTERVALS = [10_000, 20_000, 45_000, 90_000, 180_000, 300_000] as const
+const ACTIVE_REFRESH_WINDOW_MS = 90_000
+const ACTIVITY_DEBOUNCE_MS = 1_000
+const HIDDEN_TAB_TIER_INCREMENT = 2
 
 const isLoading = ref(true)
 const isUploading = ref(false)
 const isCopying = ref(false)
+const isRefreshingFiles = ref(false)
 const errorMessage = ref('')
 const uploadError = ref('')
 const selectedFile = ref<File | null>(null)
 const copyStatus = ref('')
+const copyEmailStatus = ref('')
 const uploadInput = ref<HTMLInputElement | null>(null)
 const isUploadPanelOpen = ref(true)
 const isUploadPanelPinnedOpen = ref(false)
@@ -40,9 +46,17 @@ const qrCodeDataUrl = ref('')
 const qrCodeToDataURL = ref<QrCodeToDataURL | null>(null)
 const qrCodeRequestId = ref(0)
 const stopQrCodeWatch = ref<(() => void) | null>(null)
+const isSpaceRequestInFlight = ref(false)
+const autoRefreshTimer = ref<ReturnType<typeof window.setTimeout> | null>(null)
+const refreshTierIndex = ref(0)
+const lastActiveAt = ref(Date.now())
+const lastActivityScheduleAt = ref(0)
 
 const spaceUrl = computed(() => {
   return space.value?.url || ''
+})
+const emailUploadAddress = computed(() => {
+  return `${slug.value}@0x1.one`
 })
 const hasFiles = computed(() => Boolean(space.value?.files.length))
 const showUploadArea = computed(() => !hasFiles.value || isUploadPanelOpen.value)
@@ -59,27 +73,91 @@ watch(hasFiles, (value) => {
   }
 }, { immediate: true })
 
-async function loadSpace() {
-  isLoading.value = true
+function getFilesFingerprint(files: SpaceData['files'] = []) {
+  return JSON.stringify(files.map((file) => [file.key, file.size, file.uploadedAt || '', file.name]))
+}
+
+function clearAutoRefreshTimer() {
+  if (autoRefreshTimer.value === null) {
+    return
+  }
+
+  window.clearTimeout(autoRefreshTimer.value)
+  autoRefreshTimer.value = null
+}
+
+function isDocumentHidden() {
+  return typeof document !== 'undefined' && document.hidden
+}
+
+function markRefreshActive() {
+  lastActiveAt.value = Date.now()
+  refreshTierIndex.value = 0
+}
+
+function bumpRefreshTierForHiddenTab() {
+  refreshTierIndex.value = Math.min(refreshTierIndex.value + HIDDEN_TAB_TIER_INCREMENT, REFRESH_INTERVALS.length - 1)
+}
+
+function updateRefreshTier(changed: boolean) {
+  if (changed) {
+    markRefreshActive()
+    return
+  }
+
+  if (isDocumentHidden()) {
+    bumpRefreshTierForHiddenTab()
+    return
+  }
+
+  const activeRecently = Date.now() - lastActiveAt.value < ACTIVE_REFRESH_WINDOW_MS
+  if (activeRecently) {
+    refreshTierIndex.value = 0
+    return
+  }
+
+  refreshTierIndex.value = Math.min(refreshTierIndex.value + 1, REFRESH_INTERVALS.length - 1)
+}
+
+async function loadSpace(options: { background?: boolean } = {}): Promise<boolean | null> {
+  if (isSpaceRequestInFlight.value) {
+    return null
+  }
+
+  const { background = false } = options
+  const previousFingerprint = getFilesFingerprint(space.value?.files || [])
+
+  isSpaceRequestInFlight.value = true
+  if (background) {
+    isRefreshingFiles.value = true
+  }
+  else {
+    isLoading.value = true
+  }
   errorMessage.value = ''
 
   try {
-    space.value = await $fetch<SpaceData>(`/api/spaces/${slug.value}`)
-    if (space.value) {
-      recordRecentSpace(space.value.slug, space.value.expiresAt)
-    }
+    const nextSpace = await $fetch<SpaceData>(`/api/spaces/${slug.value}`)
+    const nextFingerprint = getFilesFingerprint(nextSpace.files || [])
+    const changed = previousFingerprint !== nextFingerprint
+    space.value = nextSpace
+    recordRecentSpace(nextSpace.slug, nextSpace.expiresAt)
+    return changed
   }
   catch (error: any) {
     const statusCode = error?.statusCode ?? error?.data?.statusCode
     if (typeof statusCode === 'number' && REDIRECT_HOME_STATUS_CODES.has(statusCode)) {
       await navigateTo('/')
-      return
+      return null
     }
 
     const statusMessage = error?.data?.statusMessage
     errorMessage.value = statusMessage || 'Unable to load this share.'
+    return null
   }
   finally {
+    isSpaceRequestInFlight.value = false
+    isRefreshingFiles.value = false
     isLoading.value = false
   }
 }
@@ -239,7 +317,12 @@ async function uploadFile() {
     if (uploadInput.value) {
       uploadInput.value.value = ''
     }
-    await loadSpace()
+    markRefreshActive()
+    const changed = await loadSpace({ background: true })
+    if (typeof changed === 'boolean') {
+      updateRefreshTier(changed)
+    }
+    scheduleAutoRefresh()
   }
   catch (error: any) {
     uploadError.value = error?.message || error?.data?.statusMessage || 'Upload failed.'
@@ -292,6 +375,26 @@ async function copySpaceUrl() {
   }
 }
 
+async function copyEmailUploadAddress() {
+  if (!emailUploadAddress.value) {
+    return
+  }
+
+  try {
+    await navigator.clipboard.writeText(emailUploadAddress.value)
+    copyEmailStatus.value = 'Copied'
+    window.setTimeout(() => {
+      copyEmailStatus.value = ''
+    }, 1600)
+  }
+  catch {
+    copyEmailStatus.value = 'Copy failed'
+    window.setTimeout(() => {
+      copyEmailStatus.value = ''
+    }, 1600)
+  }
+}
+
 function openSpaceInNewTab() {
   if (!spaceUrl.value) {
     return
@@ -310,18 +413,95 @@ function closeUploadPanel() {
   isUploadPanelPinnedOpen.value = false
 }
 
+async function refreshFilesNow() {
+  markRefreshActive()
+  const changed = await loadSpace({ background: true })
+  if (typeof changed === 'boolean') {
+    updateRefreshTier(changed)
+  }
+  scheduleAutoRefresh()
+}
+
+function scheduleAutoRefresh() {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  clearAutoRefreshTimer()
+
+  const refreshDelay = REFRESH_INTERVALS[refreshTierIndex.value]
+  autoRefreshTimer.value = window.setTimeout(async () => {
+    try {
+      if (isSpaceRequestInFlight.value) {
+        scheduleAutoRefresh()
+        return
+      }
+
+      const changed = await loadSpace({ background: true })
+      if (typeof changed === 'boolean') {
+        updateRefreshTier(changed)
+      }
+      scheduleAutoRefresh()
+    }
+    catch {
+      scheduleAutoRefresh()
+    }
+  }, refreshDelay)
+}
+
+function handleInteractionActivity() {
+  const now = Date.now()
+  if (now - lastActivityScheduleAt.value < ACTIVITY_DEBOUNCE_MS) {
+    return
+  }
+
+  lastActivityScheduleAt.value = now
+  markRefreshActive()
+  scheduleAutoRefresh()
+}
+
+function handleVisibilityChange() {
+  if (!isDocumentHidden()) {
+    void refreshFilesNow()
+    return
+  }
+
+  bumpRefreshTierForHiddenTab()
+  scheduleAutoRefresh()
+}
+
 onMounted(() => {
   stopQrCodeWatch.value = watch(spaceUrl, (value) => {
     void updateQrCode(value)
   }, { immediate: true })
 
-  loadSpace()
+  void loadSpace().then((changed) => {
+    if (typeof changed === 'boolean') {
+      updateRefreshTier(changed)
+    }
+    scheduleAutoRefresh()
+  })
   void loadQrLibrary()
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('pointerdown', handleInteractionActivity, { passive: true })
+    window.addEventListener('keydown', handleInteractionActivity, { passive: true })
+    window.addEventListener('focus', handleInteractionActivity)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+  }
 })
 
 onUnmounted(() => {
   stopQrCodeWatch.value?.()
   stopQrCodeWatch.value = null
+
+  if (typeof window !== 'undefined') {
+    clearAutoRefreshTimer()
+    window.removeEventListener('pointerdown', handleInteractionActivity)
+    window.removeEventListener('keydown', handleInteractionActivity)
+    window.removeEventListener('focus', handleInteractionActivity)
+    document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }
 })
 </script>
 
@@ -349,6 +529,13 @@ onUnmounted(() => {
               </span>
               <button @click="copySpaceUrl" class="text-sm font-medium hover:underline underline-offset-4 disabled:opacity-50" :disabled="isCopying">
                  {{ copyStatus || 'Copy Link' }}
+              </button>
+            </div>
+            <div v-if="spaceUrl" class="flex items-center gap-2 text-[11px] text-[color:var(--muted)]">
+              <span>Upload by email:</span>
+              <span class="font-mono-brand text-[color:var(--text)]" aria-label="Email upload address">{{ emailUploadAddress }}</span>
+              <button class="text-[11px] font-medium hover:underline underline-offset-4" @click="copyEmailUploadAddress">
+                {{ copyEmailStatus || 'Copy' }}
               </button>
             </div>
           </div>
@@ -390,13 +577,22 @@ onUnmounted(() => {
        <div :class="showUploadArea ? 'order-2 lg:order-1 lg:col-span-2' : 'order-2 lg:order-1 lg:col-span-1'">
           <div class="mb-4 flex items-center justify-between border-b border-[color:var(--border)] pb-2">
             <h2 class="text-sm font-medium text-[color:var(--text)]">Shared Files</h2>
-            <button
-              v-if="hasFiles && !isUploadPanelOpen"
-              class="rounded border border-[color:var(--border)] px-2.5 py-1 text-[12px] font-semibold text-[color:var(--muted)] transition-colors hover:border-[color:var(--text)] hover:bg-[color:var(--bg-0)] hover:text-[color:var(--text)]"
-              @click="openUploadPanel"
-            >
-              Upload Files
-            </button>
+            <div class="flex items-center gap-2">
+              <button
+                class="rounded border border-[color:var(--border)] px-2.5 py-1 text-[12px] font-semibold text-[color:var(--muted)] transition-colors hover:border-[color:var(--text)] hover:bg-[color:var(--bg-0)] hover:text-[color:var(--text)] disabled:opacity-50"
+                :disabled="isRefreshingFiles || isLoading"
+                @click="refreshFilesNow"
+              >
+                {{ isRefreshingFiles ? 'Refreshing…' : 'Refresh' }}
+              </button>
+              <button
+                v-if="hasFiles && !isUploadPanelOpen"
+                class="rounded border border-[color:var(--border)] px-2.5 py-1 text-[12px] font-semibold text-[color:var(--muted)] transition-colors hover:border-[color:var(--text)] hover:bg-[color:var(--bg-0)] hover:text-[color:var(--text)]"
+                @click="openUploadPanel"
+              >
+                Upload Files
+              </button>
+            </div>
           </div>
 
           <p v-if="isLoading" class="mt-4 text-[13px] text-[color:var(--muted)]">Loading files...</p>
