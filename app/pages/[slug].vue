@@ -22,6 +22,7 @@ const REDIRECT_HOME_STATUS_CODES = new Set([400, 404])
 const QR_CODE_SIZE = 224
 const REFRESH_INTERVALS = [10_000, 20_000, 45_000, 90_000, 180_000, 300_000] as const
 const ACTIVE_REFRESH_WINDOW_MS = 90_000
+const ACTIVITY_DEBOUNCE_MS = 1_000
 
 const isLoading = ref(true)
 const isUploading = ref(false)
@@ -45,7 +46,7 @@ const qrCodeToDataURL = ref<QrCodeToDataURL | null>(null)
 const qrCodeRequestId = ref(0)
 const stopQrCodeWatch = ref<(() => void) | null>(null)
 const isSpaceRequestInFlight = ref(false)
-const autoRefreshTimer = ref<number | null>(null)
+const autoRefreshTimer = ref<ReturnType<typeof window.setTimeout> | null>(null)
 const refreshTierIndex = ref(0)
 const lastActiveAt = ref(Date.now())
 const lastActivityScheduleAt = ref(0)
@@ -78,7 +79,11 @@ function getFilesFingerprint(files: SpaceData['files'] = []) {
 }
 
 function clearAutoRefreshTimer() {
-  window.clearTimeout(autoRefreshTimer.value ?? undefined)
+  if (autoRefreshTimer.value === null) {
+    return
+  }
+
+  window.clearTimeout(autoRefreshTimer.value)
   autoRefreshTimer.value = null
 }
 
@@ -431,7 +436,7 @@ function scheduleAutoRefresh() {
 }
 
 function handleInteractionActivity() {
-  if (Date.now() - lastActivityScheduleAt.value < 1000) {
+  if (Date.now() - lastActivityScheduleAt.value < ACTIVITY_DEBOUNCE_MS) {
     return
   }
 
@@ -472,9 +477,9 @@ onMounted(() => {
 onUnmounted(() => {
   stopQrCodeWatch.value?.()
   stopQrCodeWatch.value = null
-  clearAutoRefreshTimer()
 
   if (typeof window !== 'undefined') {
+    clearAutoRefreshTimer()
     window.removeEventListener('pointerdown', handleInteractionActivity)
     window.removeEventListener('keydown', handleInteractionActivity)
     window.removeEventListener('focus', handleInteractionActivity)
