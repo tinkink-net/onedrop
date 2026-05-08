@@ -38,6 +38,7 @@ export function sanitizeFilename(name: string) {
   const sanitized = name
     .normalize('NFKC')
     .replace(/[\u0000-\u001F\u007F]/g, '')
+    .replace(/[\r\n]/g, ' ')
     .replace(/[\/\\]/g, '_')
     .replace(/\s+/g, ' ')
     .trim()

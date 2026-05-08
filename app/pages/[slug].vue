@@ -73,9 +73,7 @@ watch(hasFiles, (value) => {
 }, { immediate: true })
 
 function getFilesFingerprint(files: SpaceData['files'] = []) {
-  return files
-    .map((file) => `${file.key}:${file.size}:${file.uploadedAt || ''}:${file.name}`)
-    .join('|')
+  return JSON.stringify(files.map((file) => [file.key, file.size, file.uploadedAt || '', file.name]))
 }
 
 function clearAutoRefreshTimer() {
@@ -436,11 +434,12 @@ function scheduleAutoRefresh() {
 }
 
 function handleInteractionActivity() {
-  if (Date.now() - lastActivityScheduleAt.value < ACTIVITY_DEBOUNCE_MS) {
+  const now = Date.now()
+  if (now - lastActivityScheduleAt.value < ACTIVITY_DEBOUNCE_MS) {
     return
   }
 
-  lastActivityScheduleAt.value = Date.now()
+  lastActivityScheduleAt.value = now
   markRefreshActive()
   scheduleAutoRefresh()
 }
