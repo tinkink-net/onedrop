@@ -431,16 +431,21 @@ function scheduleAutoRefresh() {
 
   const refreshDelay = REFRESH_INTERVALS[refreshTierIndex.value]
   autoRefreshTimer.value = window.setTimeout(async () => {
-    if (isSpaceRequestInFlight.value) {
-      scheduleAutoRefresh()
-      return
-    }
+    try {
+      if (isSpaceRequestInFlight.value) {
+        scheduleAutoRefresh()
+        return
+      }
 
-    const changed = await loadSpace({ background: true })
-    if (typeof changed === 'boolean') {
-      updateRefreshTier(changed)
+      const changed = await loadSpace({ background: true })
+      if (typeof changed === 'boolean') {
+        updateRefreshTier(changed)
+      }
+      scheduleAutoRefresh()
     }
-    scheduleAutoRefresh()
+    catch {
+      scheduleAutoRefresh()
+    }
   }, refreshDelay)
 }
 
@@ -528,7 +533,7 @@ onUnmounted(() => {
             </div>
             <div v-if="spaceUrl" class="flex items-center gap-2 text-[11px] text-[color:var(--muted)]">
               <span>Upload by email:</span>
-              <span class="font-mono-brand text-[color:var(--text)]">{{ emailUploadAddress }}</span>
+              <span class="font-mono-brand text-[color:var(--text)]" aria-label="Email upload address">{{ emailUploadAddress }}</span>
               <button class="text-[11px] font-medium hover:underline underline-offset-4" @click="copyEmailUploadAddress">
                 {{ copyEmailStatus || 'Copy' }}
               </button>
