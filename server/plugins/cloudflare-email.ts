@@ -69,7 +69,7 @@ async function storeFileInSpace(bucket: any, slug: string, filename: string, con
   })
 }
 
-function buildBodyMarkdownText(payload: { subject?: string, from?: string, to?: string, body: string }) {
+function formatEmailAsMarkdown(payload: { subject?: string, from?: string, to?: string, body: string }) {
   const subject = payload.subject?.trim() || '(no subject)'
   const from = payload.from?.trim() || '(unknown sender)'
   const to = payload.to?.trim() || '(unknown recipient)'
@@ -126,7 +126,7 @@ export default defineNitroPlugin((nitroApp) => {
 
     const normalizedBodyText = normalizeEmailTextContent(parsedEmail.text, parsedEmail.html)
     if (normalizedBodyText.length >= MIN_BODY_TEXT_LENGTH) {
-      const markdownText = buildBodyMarkdownText({
+      const markdownText = formatEmailAsMarkdown({
         subject: parsedEmail.subject,
         from: message?.from,
         to: message?.to,

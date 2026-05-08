@@ -34,4 +34,4 @@ Configure `ONEDROP_BUCKET` as an R2 binding (see `wrangler.toml`).
 - Configure Email Routing so inbound mail to `*@0x1.one` is delivered to this Worker.
 - Recipient local-part is treated as the sharing space slug (example: `ABC234@0x1.one`).
 - Attachments are stored as files in that space.
-- If email body text contains at least 10 non-whitespace characters, it is stored as a markdown-formatted `.txt` file.
+- If email body text contains at least 10 characters after trimming, it is stored as a markdown-formatted `.txt` file.
