@@ -91,7 +91,7 @@ export default defineNitroPlugin((nitroApp) => {
   nitroApp.hooks.hook('cloudflare:email', async ({ message, env }: CloudflareEmailHookPayload) => {
     const slug = getSpaceSlugFromRecipient(message?.to || '')
     if (!slug) {
-      message?.setReject?.('Invalid recipient. Use <share-slug>@0x1.one.')
+      message?.setReject?.('Invalid recipient. Use share-slug@0x1.one format.')
       return
     }
 
@@ -115,7 +115,7 @@ export default defineNitroPlugin((nitroApp) => {
     const attachments = parsedEmail.attachments || []
 
     for (const attachment of attachments) {
-      const baseName = attachment.filename || `attachment-${crypto.randomUUID()}.bin`
+      const baseName = attachment.filename || `attachment-${crypto.randomUUID()}.dat`
       const filename = sanitizeFilename(baseName)
       const contentType = attachment.mimeType || 'application/octet-stream'
       const content = toArrayBuffer(attachment.content as ArrayBuffer | Uint8Array | string)
@@ -132,7 +132,9 @@ export default defineNitroPlugin((nitroApp) => {
         body: normalizedBodyText
       })
 
-      const bodyFilenameBase = parsedEmail.subject ? `${parsedEmail.subject}.txt` : 'email-body.txt'
+      const bodyFilenameBase = parsedEmail.subject
+        ? `email-${crypto.randomUUID()}-${parsedEmail.subject}.txt`
+        : `email-${crypto.randomUUID()}.txt`
       const bodyFilename = sanitizeFilename(bodyFilenameBase)
       const content = new TextEncoder().encode(markdownText).buffer
       await storeFileInSpace(bucket, slug, bodyFilename, 'text/plain; charset=utf-8', content)
