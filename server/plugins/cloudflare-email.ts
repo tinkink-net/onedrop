@@ -87,8 +87,14 @@ function decodeAttachmentFilename(rawFilename?: string | null) {
 }
 
 function getSpaceSlugFromRecipient(to: string) {
-  const trimmed = (to || '').trim().toLowerCase()
-  const [localPart, domain] = trimmed.split('@')
+  const trimmed = (to || '').trim()
+  const separatorIndex = trimmed.lastIndexOf('@')
+  if (separatorIndex <= 0) {
+    return null
+  }
+
+  const localPart = trimmed.slice(0, separatorIndex)
+  const domain = trimmed.slice(separatorIndex + 1).toLowerCase()
 
   if (!localPart || domain !== '0x1.one') {
     return null

@@ -56,7 +56,7 @@ const spaceUrl = computed(() => {
   return space.value?.url || ''
 })
 const emailUploadAddress = computed(() => {
-  return `${slug.value.toLowerCase()}@0x1.one`
+  return `${slug.value}@0x1.one`
 })
 const hasFiles = computed(() => Boolean(space.value?.files.length))
 const showUploadArea = computed(() => !hasFiles.value || isUploadPanelOpen.value)
