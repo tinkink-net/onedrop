@@ -188,8 +188,8 @@ export default defineNitroPlugin((nitroApp) => {
       })
 
       const bodyFilenameBase = parsedEmail.subject
-        ? `email-${crypto.randomUUID()}-${parsedEmail.subject}.txt`
-        : `email-${crypto.randomUUID()}.txt`
+        ? `${parsedEmail.subject}.txt`
+        : 'email.txt'
       const bodyFilename = sanitizeFilename(bodyFilenameBase)
       const content = new TextEncoder().encode(markdownText).buffer
       await storeFileInSpace(bucket, slug, bodyFilename, 'text/plain; charset=utf-8', content)
