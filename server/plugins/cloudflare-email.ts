@@ -114,9 +114,8 @@ export default defineNitroPlugin((nitroApp) => {
     const parsedEmail = await PostalMime.parse(message.raw)
     const attachments = parsedEmail.attachments || []
 
-    for (let i = 0; i < attachments.length; i++) {
-      const attachment = attachments[i]
-      const baseName = attachment.filename || `attachment-${crypto.randomUUID()}`
+    for (const attachment of attachments) {
+      const baseName = attachment.filename || `attachment-${crypto.randomUUID()}.bin`
       const filename = sanitizeFilename(baseName)
       const contentType = attachment.mimeType || 'application/octet-stream'
       const content = toArrayBuffer(attachment.content as ArrayBuffer | Uint8Array | string)
