@@ -6,8 +6,10 @@ type CloudflareEmailHookPayload = {
   env: any
 }
 
+const MIN_BODY_TEXT_LENGTH = 10
+
 function createFileKey() {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  return `${Date.now()}-${crypto.randomUUID()}`
 }
 
 function toArrayBuffer(content: ArrayBuffer | Uint8Array | string) {
@@ -123,7 +125,7 @@ export default defineNitroPlugin((nitroApp) => {
     }
 
     const normalizedBodyText = normalizeEmailTextContent(parsedEmail.text, parsedEmail.html)
-    if (normalizedBodyText.length >= 10) {
+    if (normalizedBodyText.length >= MIN_BODY_TEXT_LENGTH) {
       const markdownText = buildBodyMarkdownText({
         subject: parsedEmail.subject,
         from: message?.from,
