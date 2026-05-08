@@ -23,6 +23,7 @@ const QR_CODE_SIZE = 224
 const REFRESH_INTERVALS = [10_000, 20_000, 45_000, 90_000, 180_000, 300_000] as const
 const ACTIVE_REFRESH_WINDOW_MS = 90_000
 const ACTIVITY_DEBOUNCE_MS = 1_000
+const HIDDEN_TAB_TIER_INCREMENT = 2
 
 const isLoading = ref(true)
 const isUploading = ref(false)
@@ -94,6 +95,10 @@ function markRefreshActive() {
   refreshTierIndex.value = 0
 }
 
+function bumpRefreshTierForHiddenTab() {
+  refreshTierIndex.value = Math.min(refreshTierIndex.value + HIDDEN_TAB_TIER_INCREMENT, REFRESH_INTERVALS.length - 1)
+}
+
 function updateRefreshTier(changed: boolean) {
   if (changed) {
     markRefreshActive()
@@ -101,7 +106,7 @@ function updateRefreshTier(changed: boolean) {
   }
 
   if (isDocumentHidden()) {
-    refreshTierIndex.value = Math.min(refreshTierIndex.value + 2, REFRESH_INTERVALS.length - 1)
+    bumpRefreshTierForHiddenTab()
     return
   }
 
@@ -114,9 +119,9 @@ function updateRefreshTier(changed: boolean) {
   refreshTierIndex.value = Math.min(refreshTierIndex.value + 1, REFRESH_INTERVALS.length - 1)
 }
 
-async function loadSpace(options: { background?: boolean } = {}) {
+async function loadSpace(options: { background?: boolean } = {}): Promise<boolean | null> {
   if (isSpaceRequestInFlight.value) {
-    return false
+    return null
   }
 
   const { background = false } = options
@@ -143,12 +148,12 @@ async function loadSpace(options: { background?: boolean } = {}) {
     const statusCode = error?.statusCode ?? error?.data?.statusCode
     if (typeof statusCode === 'number' && REDIRECT_HOME_STATUS_CODES.has(statusCode)) {
       await navigateTo('/')
-      return false
+      return null
     }
 
     const statusMessage = error?.data?.statusMessage
     errorMessage.value = statusMessage || 'Unable to load this share.'
-    return false
+    return null
   }
   finally {
     isSpaceRequestInFlight.value = false
@@ -314,7 +319,9 @@ async function uploadFile() {
     }
     markRefreshActive()
     const changed = await loadSpace({ background: true })
-    updateRefreshTier(changed)
+    if (typeof changed === 'boolean') {
+      updateRefreshTier(changed)
+    }
     scheduleAutoRefresh()
   }
   catch (error: any) {
@@ -409,7 +416,9 @@ function closeUploadPanel() {
 async function refreshFilesNow() {
   markRefreshActive()
   const changed = await loadSpace({ background: true })
-  updateRefreshTier(changed)
+  if (typeof changed === 'boolean') {
+    updateRefreshTier(changed)
+  }
   scheduleAutoRefresh()
 }
 
@@ -428,7 +437,9 @@ function scheduleAutoRefresh() {
     }
 
     const changed = await loadSpace({ background: true })
-    updateRefreshTier(changed)
+    if (typeof changed === 'boolean') {
+      updateRefreshTier(changed)
+    }
     scheduleAutoRefresh()
   }, refreshDelay)
 }
@@ -450,7 +461,7 @@ function handleVisibilityChange() {
     return
   }
 
-  refreshTierIndex.value = Math.min(refreshTierIndex.value + 2, REFRESH_INTERVALS.length - 1)
+  bumpRefreshTierForHiddenTab()
   scheduleAutoRefresh()
 }
 
@@ -460,7 +471,9 @@ onMounted(() => {
   }, { immediate: true })
 
   void loadSpace().then((changed) => {
-    updateRefreshTier(changed)
+    if (typeof changed === 'boolean') {
+      updateRefreshTier(changed)
+    }
     scheduleAutoRefresh()
   })
   void loadQrLibrary()
