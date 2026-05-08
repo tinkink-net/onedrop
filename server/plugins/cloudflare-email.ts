@@ -9,7 +9,7 @@ type CloudflareEmailHookPayload = {
 const MIN_BODY_TEXT_LENGTH = 10
 
 function createFileKey() {
-  return `${Date.now()}-${crypto.randomUUID()}`
+  return crypto.randomUUID()
 }
 
 function toArrayBuffer(content: ArrayBuffer | Uint8Array | string) {
@@ -116,7 +116,7 @@ export default defineNitroPlugin((nitroApp) => {
 
     for (let i = 0; i < attachments.length; i++) {
       const attachment = attachments[i]
-      const baseName = attachment.filename || `attachment-${i + 1}`
+      const baseName = attachment.filename || `attachment-${crypto.randomUUID()}`
       const filename = sanitizeFilename(baseName)
       const contentType = attachment.mimeType || 'application/octet-stream'
       const content = toArrayBuffer(attachment.content as ArrayBuffer | Uint8Array | string)
