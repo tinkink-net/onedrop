@@ -20,10 +20,13 @@ const route = useRoute()
 const slug = computed(() => String(route.params.slug || '').toUpperCase())
 const REDIRECT_HOME_STATUS_CODES = new Set([400, 404])
 const QR_CODE_SIZE = 224
+const REFRESH_INTERVALS = [10_000, 20_000, 45_000, 90_000, 180_000, 300_000] as const
+const ACTIVE_REFRESH_WINDOW_MS = 90_000
 
 const isLoading = ref(true)
 const isUploading = ref(false)
 const isCopying = ref(false)
+const isRefreshingFiles = ref(false)
 const errorMessage = ref('')
 const uploadError = ref('')
 const selectedFile = ref<File | null>(null)
@@ -40,9 +43,16 @@ const qrCodeDataUrl = ref('')
 const qrCodeToDataURL = ref<QrCodeToDataURL | null>(null)
 const qrCodeRequestId = ref(0)
 const stopQrCodeWatch = ref<(() => void) | null>(null)
+const isSpaceRequestInFlight = ref(false)
+const autoRefreshTimer = ref<number | null>(null)
+const refreshTierIndex = ref(0)
+const lastActiveAt = ref(Date.now())
 
 const spaceUrl = computed(() => {
   return space.value?.url || ''
+})
+const emailUploadAddress = computed(() => {
+  return `${slug.value.toLowerCase()}@0x1.one`
 })
 const hasFiles = computed(() => Boolean(space.value?.files.length))
 const showUploadArea = computed(() => !hasFiles.value || isUploadPanelOpen.value)
@@ -59,27 +69,83 @@ watch(hasFiles, (value) => {
   }
 }, { immediate: true })
 
-async function loadSpace() {
-  isLoading.value = true
+function getFilesFingerprint(files: SpaceData['files'] = []) {
+  return files
+    .map((file) => `${file.key}:${file.size}:${file.uploadedAt || ''}:${file.name}`)
+    .join('|')
+}
+
+function clearAutoRefreshTimer() {
+  if (autoRefreshTimer.value !== null && typeof window !== 'undefined') {
+    window.clearTimeout(autoRefreshTimer.value)
+    autoRefreshTimer.value = null
+  }
+}
+
+function markRefreshActive() {
+  lastActiveAt.value = Date.now()
+  refreshTierIndex.value = 0
+}
+
+function updateRefreshTier(changed: boolean) {
+  if (changed) {
+    markRefreshActive()
+    return
+  }
+
+  if (typeof document !== 'undefined' && document.hidden) {
+    refreshTierIndex.value = Math.min(refreshTierIndex.value + 2, REFRESH_INTERVALS.length - 1)
+    return
+  }
+
+  const activeRecently = Date.now() - lastActiveAt.value < ACTIVE_REFRESH_WINDOW_MS
+  if (activeRecently) {
+    refreshTierIndex.value = 0
+    return
+  }
+
+  refreshTierIndex.value = Math.min(refreshTierIndex.value + 1, REFRESH_INTERVALS.length - 1)
+}
+
+async function loadSpace(options: { background?: boolean } = {}) {
+  if (isSpaceRequestInFlight.value) {
+    return false
+  }
+
+  const { background = false } = options
+  const previousFingerprint = getFilesFingerprint(space.value?.files || [])
+
+  isSpaceRequestInFlight.value = true
+  if (background) {
+    isRefreshingFiles.value = true
+  }
+  else {
+    isLoading.value = true
+  }
   errorMessage.value = ''
 
   try {
-    space.value = await $fetch<SpaceData>(`/api/spaces/${slug.value}`)
-    if (space.value) {
-      recordRecentSpace(space.value.slug, space.value.expiresAt)
-    }
+    const nextSpace = await $fetch<SpaceData>(`/api/spaces/${slug.value}`)
+    const nextFingerprint = getFilesFingerprint(nextSpace.files || [])
+    const changed = previousFingerprint !== nextFingerprint
+    space.value = nextSpace
+    recordRecentSpace(nextSpace.slug, nextSpace.expiresAt)
+    return changed
   }
   catch (error: any) {
     const statusCode = error?.statusCode ?? error?.data?.statusCode
     if (typeof statusCode === 'number' && REDIRECT_HOME_STATUS_CODES.has(statusCode)) {
       await navigateTo('/')
-      return
+      return false
     }
 
     const statusMessage = error?.data?.statusMessage
     errorMessage.value = statusMessage || 'Unable to load this share.'
+    return false
   }
   finally {
+    isSpaceRequestInFlight.value = false
+    isRefreshingFiles.value = false
     isLoading.value = false
   }
 }
@@ -239,7 +305,10 @@ async function uploadFile() {
     if (uploadInput.value) {
       uploadInput.value.value = ''
     }
-    await loadSpace()
+    markRefreshActive()
+    const changed = await loadSpace({ background: true })
+    updateRefreshTier(changed)
+    scheduleAutoRefresh()
   }
   catch (error: any) {
     uploadError.value = error?.message || error?.data?.statusMessage || 'Upload failed.'
@@ -310,18 +379,73 @@ function closeUploadPanel() {
   isUploadPanelPinnedOpen.value = false
 }
 
+async function refreshFilesNow() {
+  markRefreshActive()
+  const changed = await loadSpace({ background: true })
+  updateRefreshTier(changed)
+  scheduleAutoRefresh()
+}
+
+function scheduleAutoRefresh() {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  clearAutoRefreshTimer()
+
+  const refreshDelay = REFRESH_INTERVALS[refreshTierIndex.value]
+  autoRefreshTimer.value = window.setTimeout(async () => {
+    const changed = await loadSpace({ background: true })
+    updateRefreshTier(changed)
+    scheduleAutoRefresh()
+  }, refreshDelay)
+}
+
+function handleInteractionActivity() {
+  markRefreshActive()
+  scheduleAutoRefresh()
+}
+
+function handleVisibilityChange() {
+  if (typeof document !== 'undefined' && !document.hidden) {
+    void refreshFilesNow()
+    return
+  }
+
+  refreshTierIndex.value = Math.min(refreshTierIndex.value + 2, REFRESH_INTERVALS.length - 1)
+  scheduleAutoRefresh()
+}
+
 onMounted(() => {
   stopQrCodeWatch.value = watch(spaceUrl, (value) => {
     void updateQrCode(value)
   }, { immediate: true })
 
-  loadSpace()
+  void loadSpace().then((changed) => {
+    updateRefreshTier(changed)
+    scheduleAutoRefresh()
+  })
   void loadQrLibrary()
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('pointerdown', handleInteractionActivity, { passive: true })
+    window.addEventListener('keydown', handleInteractionActivity)
+    window.addEventListener('focus', handleInteractionActivity)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+  }
 })
 
 onUnmounted(() => {
   stopQrCodeWatch.value?.()
   stopQrCodeWatch.value = null
+  clearAutoRefreshTimer()
+
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('pointerdown', handleInteractionActivity)
+    window.removeEventListener('keydown', handleInteractionActivity)
+    window.removeEventListener('focus', handleInteractionActivity)
+    document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }
 })
 </script>
 
@@ -351,6 +475,9 @@ onUnmounted(() => {
                  {{ copyStatus || 'Copy Link' }}
               </button>
             </div>
+            <p v-if="spaceUrl" class="text-[11px] text-[color:var(--muted)]">
+              Upload by email: <span class="font-mono-brand text-[color:var(--text)]">{{ emailUploadAddress }}</span>
+            </p>
           </div>
         </div>
         <div v-if="qrCodeDataUrl" class="hidden lg:block absolute top-6 md:top-12 right-6">
@@ -390,13 +517,22 @@ onUnmounted(() => {
        <div :class="showUploadArea ? 'order-2 lg:order-1 lg:col-span-2' : 'order-2 lg:order-1 lg:col-span-1'">
           <div class="mb-4 flex items-center justify-between border-b border-[color:var(--border)] pb-2">
             <h2 class="text-sm font-medium text-[color:var(--text)]">Shared Files</h2>
-            <button
-              v-if="hasFiles && !isUploadPanelOpen"
-              class="rounded border border-[color:var(--border)] px-2.5 py-1 text-[12px] font-semibold text-[color:var(--muted)] transition-colors hover:border-[color:var(--text)] hover:bg-[color:var(--bg-0)] hover:text-[color:var(--text)]"
-              @click="openUploadPanel"
-            >
-              Upload Files
-            </button>
+            <div class="flex items-center gap-2">
+              <button
+                class="rounded border border-[color:var(--border)] px-2.5 py-1 text-[12px] font-semibold text-[color:var(--muted)] transition-colors hover:border-[color:var(--text)] hover:bg-[color:var(--bg-0)] hover:text-[color:var(--text)] disabled:opacity-50"
+                :disabled="isRefreshingFiles || isLoading"
+                @click="refreshFilesNow"
+              >
+                {{ isRefreshingFiles ? 'Refreshing…' : 'Refresh' }}
+              </button>
+              <button
+                v-if="hasFiles && !isUploadPanelOpen"
+                class="rounded border border-[color:var(--border)] px-2.5 py-1 text-[12px] font-semibold text-[color:var(--muted)] transition-colors hover:border-[color:var(--text)] hover:bg-[color:var(--bg-0)] hover:text-[color:var(--text)]"
+                @click="openUploadPanel"
+              >
+                Upload Files
+              </button>
+            </div>
           </div>
 
           <p v-if="isLoading" class="mt-4 text-[13px] text-[color:var(--muted)]">Loading files...</p>
