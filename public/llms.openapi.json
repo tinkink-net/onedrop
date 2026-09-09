@@ -2,14 +2,38 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Onedrop",
-    "version": "1.0.0",
-    "description": "Frictionless expiring file share. 6-char share codes, no auth, 5 MiB chunks. See /llms.txt for the human-readable protocol description.",
+    "version": "1.1.0",
+    "description": "Frictionless expiring file share. 6-char share codes, no auth. Two upload modes: a single-request multipart upload (default) and a 5 MiB chunked upload for large files. See /llms.txt for the human-readable protocol description.",
     "license": { "name": "MIT" }
   },
   "servers": [
     { "url": "https://0x1.one", "description": "Production" }
   ],
   "paths": {
+    "/api": {
+      "get": {
+        "summary": "JSON index of the API",
+        "description": "Returns this summary as JSON, including the location of /llms.txt and the OpenAPI spec. Useful as a first request when probing the service.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "service": { "type": "string" },
+                    "docs": { "type": "string", "format": "uri" },
+                    "openapi": { "type": "string", "format": "uri" },
+                    "endpoints": { "type": "array", "items": { "type": "object" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/spaces/create": {
       "post": {
         "summary": "Create a share space",
@@ -35,14 +59,32 @@
     },
     "/api/spaces/{slug}/upload": {
       "post": {
-        "summary": "Upload (start | part | complete)",
+        "summary": "Upload a file",
+        "description": "Two modes.\n\n1. **Simple (preferred):** omit `action`, send `multipart/form-data` with a `file` field. One request, any size the Worker request body limit allows.\n\n2. **Chunked:** pass `action=start` / `action=part` / `action=complete`. Required for large files; chunks must be exactly 5 MiB.",
         "parameters": [
           { "name": "slug", "in": "path", "required": true, "schema": { "type": "string", "pattern": "^[A-HJ-NP-Z2-9]{6}$" } },
-          { "name": "action", "in": "query", "required": true, "schema": { "type": "string", "enum": ["start", "part", "complete"] } }
+          {
+            "name": "action",
+            "in": "query",
+            "required": false,
+            "description": "Omit for the simple single-request upload. Setting it switches to the chunked flow.",
+            "schema": { "type": "string", "enum": ["start", "part", "complete"] }
+          },
+          { "name": "key", "in": "query", "required": false, "description": "Chunked flow only, for action=part. Key returned by action=start.", "schema": { "type": "string" } },
+          { "name": "uploadId", "in": "query", "required": false, "description": "Chunked flow only, for action=part.", "schema": { "type": "string" } },
+          { "name": "partNumber", "in": "query", "required": false, "description": "Chunked flow only, for action=part. Starts at 1.", "schema": { "type": "integer", "minimum": 1 } }
         ],
         "requestBody": {
           "required": true,
           "content": {
+            "multipart/form-data": {
+              "schema": {
+                "oneOf": [
+                  { "$ref": "#/components/schemas/SimpleUploadRequest" },
+                  { "$ref": "#/components/schemas/UploadPartRequest" }
+                ]
+              }
+            },
             "application/json": {
               "schema": {
                 "oneOf": [
@@ -50,22 +92,29 @@
                   { "$ref": "#/components/schemas/UploadCompleteRequest" }
                 ]
               }
-            },
-            "multipart/form-data": {
-              "schema": { "$ref": "#/components/schemas/UploadPartRequest" }
             }
           }
         },
         "responses": {
-          "200": { "description": "OK" }
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    { "$ref": "#/components/schemas/UploadSimpleResponse" },
+                    { "$ref": "#/components/schemas/UploadStartResponse" },
+                    { "$ref": "#/components/schemas/UploadPartResponse" },
+                    { "$ref": "#/components/schemas/UploadCompleteResponse" }
+                  ]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "410": { "$ref": "#/components/responses/Gone" }
         }
-      }
-    },
-    "/api/spaces/email-upload": {
-      "post": {
-        "summary": "Upload via email hook",
-        "description": "Internal Cloudflare Email Routing endpoint — invoked when mail is sent to <slug>@0x1.one. Not directly callable from outside Cloudflare.",
-        "responses": { "200": { "description": "OK" } }
       }
     },
     "/api/spaces/{slug}": {
@@ -82,25 +131,35 @@
                 "schema": { "$ref": "#/components/schemas/ListSpaceResponse" }
               }
             }
-          }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "410": { "$ref": "#/components/responses/Gone" }
         }
       }
     },
     "/api/spaces/{slug}/files/{key}": {
       "get": {
-        "summary": "Download a file (GET only)",
+        "summary": "Download a file (GET only — do not use HEAD)",
         "parameters": [
           { "name": "slug", "in": "path", "required": true, "schema": { "type": "string", "pattern": "^[A-HJ-NP-Z2-9]{6}$" } },
           { "name": "key", "in": "path", "required": true, "schema": { "type": "string" } }
         ],
         "responses": {
           "200": { "description": "Raw bytes", "content": { "application/octet-stream": { "schema": { "type": "string", "format": "binary" } } } },
-          "404": { "description": "Not found" }
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "410": { "$ref": "#/components/responses/Gone" }
         }
       }
     }
   },
   "components": {
+    "responses": {
+      "BadRequest": { "description": "Malformed share code or file key, or a missing required part" },
+      "NotFound": { "description": "Share or file does not exist" },
+      "Gone": { "description": "Share has expired" }
+    },
     "schemas": {
       "CreateSpaceRequest": {
         "type": "object",
@@ -108,12 +167,29 @@
       },
       "CreateSpaceResponse": {
         "type": "object",
-        "required": ["slug", "url", "createdAt", "expiresAt"],
+        "required": ["slug", "url", "createdAt", "expiresAt", "expiresInHours"],
         "properties": {
           "slug": { "type": "string", "pattern": "^[A-HJ-NP-Z2-9]{6}$" },
           "url": { "type": "string", "format": "uri" },
-          "createdAt": { "type": "string", "format": "date-time" },
-          "expiresAt": { "type": "string", "format": "date-time" }
+          "createdAt": { "type": "integer", "description": "Epoch milliseconds" },
+          "expiresAt": { "type": "integer", "description": "Epoch milliseconds" },
+          "expiresInHours": { "type": "integer" }
+        }
+      },
+      "SimpleUploadRequest": {
+        "type": "object",
+        "description": "Single-request upload. No action query parameter.",
+        "required": ["file"],
+        "properties": {
+          "file": { "type": "string", "format": "binary" }
+        }
+      },
+      "UploadSimpleResponse": {
+        "type": "object",
+        "required": ["ok", "key"],
+        "properties": {
+          "ok": { "type": "boolean" },
+          "key": { "type": "string" }
         }
       },
       "UploadStartRequest": {
@@ -131,6 +207,8 @@
           "ok": { "type": "boolean" },
           "key": { "type": "string" },
           "uploadId": { "type": "string" },
+          "name": { "type": "string" },
+          "type": { "type": "string" },
           "uploadedAt": { "type": "string", "format": "date-time" }
         }
       },
@@ -138,7 +216,7 @@
         "type": "object",
         "required": ["chunk"],
         "properties": {
-          "chunk": { "type": "string", "format": "binary", "description": "Exactly 5 MiB" }
+          "chunk": { "type": "string", "format": "binary", "description": "Exactly 5 MiB (5 * 1024 * 1024 bytes)" }
         }
       },
       "UploadPartResponse": {
@@ -167,7 +245,7 @@
             }
           },
           "name": { "type": "string" },
-          "uploadedAt": { "type": "string", "format": "date-time", "description": "Must equal value returned by start, verbatim" }
+          "uploadedAt": { "type": "string", "format": "date-time", "description": "Must equal the value returned by action=start, verbatim" }
         }
       },
       "UploadCompleteResponse": {
@@ -179,20 +257,26 @@
       },
       "ListSpaceResponse": {
         "type": "object",
+        "required": ["slug", "url", "createdAt", "expiresAt", "files"],
         "properties": {
           "slug": { "type": "string" },
+          "url": { "type": "string", "format": "uri" },
+          "createdAt": { "type": "integer", "description": "Epoch milliseconds" },
+          "expiresAt": { "type": "integer", "description": "Epoch milliseconds" },
           "files": {
             "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "key": { "type": "string" },
-                "name": { "type": "string" },
-                "size": { "type": "integer" },
-                "uploadedAt": { "type": "string", "format": "date-time" }
-              }
-            }
+            "items": { "$ref": "#/components/schemas/SpaceFile" }
           }
+        }
+      },
+      "SpaceFile": {
+        "type": "object",
+        "required": ["key", "name", "size"],
+        "properties": {
+          "key": { "type": "string" },
+          "name": { "type": "string" },
+          "size": { "type": "integer" },
+          "uploadedAt": { "type": "string", "format": "date-time" }
         }
       }
     }

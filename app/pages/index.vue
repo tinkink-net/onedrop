@@ -165,6 +165,17 @@ onMounted(() => {
       </div>
       <h1 class="mt-8 text-4xl font-medium tracking-tight md:text-5xl">Share files without friction.</h1>
       <p class="mt-5 max-w-xl text-[15px] leading-relaxed text-[#555]">Temporary sharing links that expire automatically. No accounts required. Start sharing, drop your files, and collaborate instantly.</p>
+
+      <!-- Kept high in the DOM: agents that summarise or truncate the page
+           drop footer content, so the docs pointer must not live down there. -->
+      <a
+        href="/llms.txt"
+        class="mt-7 inline-flex items-center gap-2.5 border border-[color:var(--border)] bg-white px-4 py-2.5 text-[13px] font-medium transition-colors hover:border-[color:var(--text)]"
+      >
+        <span class="h-1.5 w-1.5 rounded-full bg-[color:var(--primary)]"></span>
+        For agents
+        <span class="font-mono-brand text-[11px] text-[color:var(--muted)]">/llms.txt</span>
+      </a>
     </header>
 
     <div class="space-y-6">
@@ -218,11 +229,6 @@ onMounted(() => {
             <p v-if="joinError" class="mt-1 text-sm text-[color:var(--danger)]">{{ joinError }}</p>
         </div>
       </section>
-
-      <!-- Agent Link -->
-      <p class="pt-4 font-mono-brand text-[11px] tracking-widest text-[color:var(--muted)] uppercase">
-        <a href="/llms.txt" target="_blank" rel="noopener" class="transition-colors hover:text-[color:var(--text)]">For Agents →</a>
-      </p>
 
       <!-- Recent Spaces -->
       <section v-if="recentSpaces.length" class="mt-20 border-t border-[color:var(--border)] pt-10">

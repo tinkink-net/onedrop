@@ -19,6 +19,30 @@ type QrCodeModule = {
 const route = useRoute()
 const slug = computed(() => String(route.params.slug || '').toUpperCase())
 const REDIRECT_HOME_STATUS_CODES = new Set([400, 404])
+
+// Crockford base32, 6 chars, uppercase — same rule as server/utils/spaces.ts.
+const SHARE_CODE_PATTERN = /^[A-HJ-NP-Z2-9]{6}$/
+
+// This page matches every single-segment path, so /api, /sitemap.xml,
+// /openapi.json, /agents.md ... used to render here with HTTP 200 (soft 404),
+// which made agents believe those files existed. Anything that is not a valid
+// share code must produce a real 404.
+if (import.meta.server && !SHARE_CODE_PATTERN.test(slug.value)) {
+// NOTE: do not set `fatal: true` here. Nitro's default error handler strips
+// `message` and `data` from the JSON body when an error is fatal or unhandled,
+// and this is a plain 404 we want to explain, not a crash.
+throw createError({
+  statusCode: 404,
+  statusMessage: 'Not Found',
+  message: 'No share at this path. Share codes are 6 characters from A-Z and 2-9 '
+    + '(no I, O, 0, 1). See /llms.txt for the API.',
+  data: {
+    docs: '/llms.txt',
+    openapi: '/llms.openapi.json',
+    apiIndex: '/api'
+  }
+})
+}
 const QR_CODE_SIZE = 224
 const REFRESH_INTERVALS = [10_000, 20_000, 45_000, 90_000, 180_000, 300_000] as const
 const ACTIVE_REFRESH_WINDOW_MS = 90_000

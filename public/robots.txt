@@ -2,4 +2,5 @@ User-Agent: *
 Disallow:
 
 # AI agents: read /llms.txt for the full upload/download protocol.
-Sitemap: /llms.txt
+# Machine-readable OpenAPI 3.1 spec: /llms.openapi.json
+Sitemap: https://0x1.one/sitemap.xml

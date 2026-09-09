@@ -14,6 +14,34 @@ Cloudflare-based temporary file sharing built with Nuxt.
 - [`/llms.txt`](public/llms.txt) — machine-readable protocol for AI agents
 - [`/llms.openapi.json`](public/llms.openapi.json) — OpenAPI 3.1 spec
 
+## Agent discovery
+
+AI agents should be able to find the machine-readable docs without being told
+where they are. Every response carries a `Link: </llms.txt>` header, and the
+following all resolve:
+
+| Path | Result |
+| --- | --- |
+| `/llms.txt` | Protocol guide (served as `text/markdown`) |
+| `/llms.openapi.json` | OpenAPI 3.1 spec |
+| `/api` | JSON index pointing at both |
+| `/.well-known/llms.txt`, `/.well-known/ai.txt`, `/llms-full.txt`, `/agents.md` | 308 → `/llms.txt` |
+| `/openapi.json`, `/.well-known/openapi.json` | 308 → `/llms.openapi.json` |
+
+`robots.txt` and `sitemap.xml` both reference `llms.txt`. Single-segment paths
+that are not valid share codes return a real 404 instead of rendering the share
+page with HTTP 200.
+
+## Upload modes
+
+- **Simple (default):** `POST /api/spaces/{slug}/upload` with
+  `multipart/form-data` field `file`. One request.
+- **Chunked:** `?action=start|part|complete`, required only for large files.
+  Chunks must be exactly 5 MiB and `uploadedAt` must round-trip verbatim.
+
+Email upload has no HTTP endpoint — it runs through Cloudflare Email Routing
+(`<share-slug>@0x1.one`).
+
 ## Development
 
 ```bash
