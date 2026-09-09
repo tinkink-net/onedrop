@@ -1,0 +1,80 @@
+# Onedrop
+
+> Frictionless expiring file share. 6-character share codes, no signup,
+> 3-hour default TTL. REST API for agents; static page for humans.
+
+- **For agents:** read this file first. You're already here.
+- **For humans:** visit [the landing page](https://0x1.one) — it has a copy-paste curl recipe.
+- **Machine-readable spec:** see [`llms.openapi.json`](/llms.openapi.json).
+- **Source:** [github.com/tinkink-net/onedrop](https://github.com/tinkink-net/onedrop)
+
+## API
+
+- `POST /api/spaces/create` — create a share space
+- `POST /api/spaces/{slug}/upload?action=start` — begin multipart upload
+- `POST /api/spaces/{slug}/upload?action=part` — upload one 5 MiB chunk
+- `POST /api/spaces/{slug}/upload?action=complete` — finalize
+- `GET  /api/spaces/{slug}` — list files in a share
+- `GET  /api/spaces/{slug}/files/{key}` — download a file (use GET, not HEAD)
+- `POST /api/spaces/email-upload` — upload via email (`<slug>@0x1.one`)
+
+### Create
+
+```bash
+curl -sX POST https://0x1.one/api/spaces/create \
+  -H "Content-Type: application/json" \
+  -d '{"expiresInHours": 6}'
+# → {"slug":"KPN9GQ","url":"https://0x1.one/KPN9GQ", ...}
+```
+
+### Upload (5-step)
+
+```bash
+# 1. start
+START=$(curl -sX POST "https://0x1.one/api/spaces/KPN9GQ/upload?action=start" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"hello.mp4","type":"video/mp4"}')
+
+# 2. part (repeat for each 5 MiB chunk; partNumber starts at 1)
+curl -sX POST "https://0x1.one/api/spaces/KPN9GQ/upload?action=part&key=...&uploadId=...&partNumber=1" \
+  -F "chunk=@chunk-001.bin"
+
+# 3. complete (round-trip uploadedAt from step 1 verbatim)
+curl -sX POST "https://0x1.one/api/spaces/KPN9GQ/upload?action=complete" \
+  -H "Content-Type: application/json" \
+  -d '{"key":"...","uploadId":"...","parts":[...],"name":"hello.mp4","uploadedAt":"...from step 1..."}'
+
+# 4. download
+curl -s "https://0x1.one/api/spaces/KPN9GQ/files/<key>" -o hello.mp4
+```
+
+### Email upload
+
+Send an email to `<share-slug>@0x1.one`. Attachments become files in that
+space; body text (≥10 chars after trimming) is stored as a markdown `.txt`.
+
+## Constraints
+
+- **Chunk size:** exactly 5 MiB (`5 * 1024 * 1024` bytes). No other size is accepted.
+- **Share code alphabet:** Crockford base32, 6 chars, uppercase only.
+  Pattern: `^[A-HJ-NP-Z2-9]{6}$` (no `I`, `O`, `0`, `1`).
+- **uploadedAt round-trips:** the value returned by `action=start` must be
+  passed back verbatim to `action=complete`. Regenerating it with
+  `datetime.now()` yields a session-invalid error.
+- **TTL:** `expiresInHours` default 3, max 24.
+- **No authentication.** Anyone with the share code can upload or download.
+  Do not market this as private storage.
+- **Use GET, not HEAD.** The upstream protocol relies on GET for downloads.
+  HEAD may return 200 with empty body or 404 depending on edge infrastructure —
+  neither is meaningful; always use GET to verify downloads.
+
+## Worked example
+
+A 72.4 MB / 14-chunk MP4 completes in ~3 s on residential broadband.
+
+## Reference
+
+- OpenAPI 3.1 spec: [`/llms.openapi.json`](/llms.openapi.json)
+- Source / reference Python client:
+  [github.com/tinkink-net/onedrop](https://github.com/tinkink-net/onedrop)
+- Live site: <https://0x1.one>
