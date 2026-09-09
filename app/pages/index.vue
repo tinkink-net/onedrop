@@ -219,6 +219,11 @@ onMounted(() => {
         </div>
       </section>
 
+      <!-- Agent Link -->
+      <p class="pt-4 font-mono-brand text-[11px] tracking-widest text-[color:var(--muted)] uppercase">
+        <a href="/llms.txt" target="_blank" rel="noopener" class="transition-colors hover:text-[color:var(--text)]">For Agents →</a>
+      </p>
+
       <!-- Recent Spaces -->
       <section v-if="recentSpaces.length" class="mt-20 border-t border-[color:var(--border)] pt-10">
         <div class="mb-6 flex items-center justify-between">
