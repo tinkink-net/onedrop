@@ -11,6 +11,8 @@ Cloudflare-based temporary file sharing built with Nuxt.
 - Configurable expiration (default 3h, max 24h)
 - Uses Cloudflare R2 for files + metadata (no database)
 - Scheduled cleanup every 5 minutes via Cloudflare cron
+- [`/llms.txt`](public/llms.txt) — machine-readable protocol for AI agents
+- [`/llms.openapi.json`](public/llms.openapi.json) — OpenAPI 3.1 spec
 
 ## Development
 

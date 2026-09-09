@@ -1,0 +1,200 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Onedrop",
+    "version": "1.0.0",
+    "description": "Frictionless expiring file share. 6-char share codes, no auth, 5 MiB chunks. See /llms.txt for the human-readable protocol description.",
+    "license": { "name": "MIT" }
+  },
+  "servers": [
+    { "url": "https://0x1.one", "description": "Production" }
+  ],
+  "paths": {
+    "/api/spaces/create": {
+      "post": {
+        "summary": "Create a share space",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateSpaceRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Space created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CreateSpaceResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/spaces/{slug}/upload": {
+      "post": {
+        "summary": "Upload (start | part | complete)",
+        "parameters": [
+          { "name": "slug", "in": "path", "required": true, "schema": { "type": "string", "pattern": "^[A-HJ-NP-Z2-9]{6}$" } },
+          { "name": "action", "in": "query", "required": true, "schema": { "type": "string", "enum": ["start", "part", "complete"] } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  { "$ref": "#/components/schemas/UploadStartRequest" },
+                  { "$ref": "#/components/schemas/UploadCompleteRequest" }
+                ]
+              }
+            },
+            "multipart/form-data": {
+              "schema": { "$ref": "#/components/schemas/UploadPartRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "OK" }
+        }
+      }
+    },
+    "/api/spaces/email-upload": {
+      "post": {
+        "summary": "Upload via email hook",
+        "description": "Internal Cloudflare Email Routing endpoint — invoked when mail is sent to <slug>@0x1.one. Not directly callable from outside Cloudflare.",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/spaces/{slug}": {
+      "get": {
+        "summary": "List files in a space",
+        "parameters": [
+          { "name": "slug", "in": "path", "required": true, "schema": { "type": "string", "pattern": "^[A-HJ-NP-Z2-9]{6}$" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ListSpaceResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/spaces/{slug}/files/{key}": {
+      "get": {
+        "summary": "Download a file (GET only)",
+        "parameters": [
+          { "name": "slug", "in": "path", "required": true, "schema": { "type": "string", "pattern": "^[A-HJ-NP-Z2-9]{6}$" } },
+          { "name": "key", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Raw bytes", "content": { "application/octet-stream": { "schema": { "type": "string", "format": "binary" } } } },
+          "404": { "description": "Not found" }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CreateSpaceRequest": {
+        "type": "object",
+        "properties": { "expiresInHours": { "type": "integer", "minimum": 1, "maximum": 24, "default": 3 } }
+      },
+      "CreateSpaceResponse": {
+        "type": "object",
+        "required": ["slug", "url", "createdAt", "expiresAt"],
+        "properties": {
+          "slug": { "type": "string", "pattern": "^[A-HJ-NP-Z2-9]{6}$" },
+          "url": { "type": "string", "format": "uri" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "expiresAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "UploadStartRequest": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string" },
+          "type": { "type": "string", "default": "application/octet-stream" }
+        }
+      },
+      "UploadStartResponse": {
+        "type": "object",
+        "required": ["ok", "key", "uploadId", "uploadedAt"],
+        "properties": {
+          "ok": { "type": "boolean" },
+          "key": { "type": "string" },
+          "uploadId": { "type": "string" },
+          "uploadedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "UploadPartRequest": {
+        "type": "object",
+        "required": ["chunk"],
+        "properties": {
+          "chunk": { "type": "string", "format": "binary", "description": "Exactly 5 MiB" }
+        }
+      },
+      "UploadPartResponse": {
+        "type": "object",
+        "properties": {
+          "ok": { "type": "boolean" },
+          "partNumber": { "type": "integer", "minimum": 1 },
+          "etag": { "type": "string" }
+        }
+      },
+      "UploadCompleteRequest": {
+        "type": "object",
+        "required": ["key", "uploadId", "parts", "name", "uploadedAt"],
+        "properties": {
+          "key": { "type": "string" },
+          "uploadId": { "type": "string" },
+          "parts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["partNumber", "etag"],
+              "properties": {
+                "partNumber": { "type": "integer", "minimum": 1 },
+                "etag": { "type": "string" }
+              }
+            }
+          },
+          "name": { "type": "string" },
+          "uploadedAt": { "type": "string", "format": "date-time", "description": "Must equal value returned by start, verbatim" }
+        }
+      },
+      "UploadCompleteResponse": {
+        "type": "object",
+        "properties": {
+          "ok": { "type": "boolean" },
+          "key": { "type": "string" }
+        }
+      },
+      "ListSpaceResponse": {
+        "type": "object",
+        "properties": {
+          "slug": { "type": "string" },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": { "type": "string" },
+                "name": { "type": "string" },
+                "size": { "type": "integer" },
+                "uploadedAt": { "type": "string", "format": "date-time" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

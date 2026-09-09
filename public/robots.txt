@@ -1,2 +1,5 @@
 User-Agent: *
 Disallow:
+
+# AI agents: read /llms.txt for the full upload/download protocol.
+Sitemap: /llms.txt
