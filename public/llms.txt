@@ -5,72 +5,130 @@
 
 - **For agents:** read this file first. You're already here.
 - **For humans:** visit [the landing page](https://0x1.one) — it has a copy-paste curl recipe.
-- **Machine-readable spec:** see [`llms.openapi.json`](/llms.openapi.json).
+- **Machine-readable spec:** [`llms.openapi.json`](/llms.openapi.json)
+- **Same summary as JSON:** [`GET /api`](/api)
 - **Source:** [github.com/tinkink-net/onedrop](https://github.com/tinkink-net/onedrop)
+
+## Quickstart (2 requests, no chunking)
+
+```bash
+# 1. create a share
+SLUG=$(curl -sX POST https://0x1.one/api/spaces/create \
+  -H 'Content-Type: application/json' \
+  -d '{"expiresInHours": 3}' | jq -r .slug)
+# → HZX2SE
+
+# 2. upload — one request, no chunking
+curl -sX POST "https://0x1.one/api/spaces/$SLUG/upload" \
+  -F "file=@report.pdf"
+# → {"ok":true,"key":"1788921237256-l4b2av"}
+
+# 3. hand over the human-facing link
+echo "https://0x1.one/$SLUG"
+```
+
+That is the whole happy path. The chunked flow further down is only for files
+too large to send in one request body.
 
 ## API
 
 - `POST /api/spaces/create` — create a share space
-- `POST /api/spaces/{slug}/upload?action=start` — begin multipart upload
+- `POST /api/spaces/{slug}/upload` — **simple upload**, `multipart/form-data`, field `file`
+- `POST /api/spaces/{slug}/upload?action=start` — begin a chunked upload
 - `POST /api/spaces/{slug}/upload?action=part` — upload one 5 MiB chunk
-- `POST /api/spaces/{slug}/upload?action=complete` — finalize
+- `POST /api/spaces/{slug}/upload?action=complete` — finalize a chunked upload
 - `GET  /api/spaces/{slug}` — list files in a share
 - `GET  /api/spaces/{slug}/files/{key}` — download a file (use GET, not HEAD)
-- `POST /api/spaces/email-upload` — upload via email (`<slug>@0x1.one`)
+- `GET  /api` — JSON index of the above
 
 ### Create
 
 ```bash
 curl -sX POST https://0x1.one/api/spaces/create \
-  -H "Content-Type: application/json" \
+  -H 'Content-Type: application/json' \
   -d '{"expiresInHours": 6}'
-# → {"slug":"KPN9GQ","url":"https://0x1.one/KPN9GQ", ...}
+# → {"slug":"HZX2SE","url":"https://0x1.one/HZX2SE",
+#    "createdAt":1788921236463,"expiresAt":1788924836463,"expiresInHours":6}
 ```
 
-### Upload (5-step)
+`expiresInHours` is optional (default 3, clamped to 1–24). `createdAt` and
+`expiresAt` are epoch **milliseconds**.
+
+### Simple upload (preferred)
+
+```bash
+curl -sX POST "https://0x1.one/api/spaces/HZX2SE/upload" \
+  -F "file=@report.pdf"
+# → {"ok":true,"key":"1788921237256-l4b2av"}
+```
+
+### Chunked upload (large files only)
 
 ```bash
 # 1. start
-START=$(curl -sX POST "https://0x1.one/api/spaces/KPN9GQ/upload?action=start" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"hello.mp4","type":"video/mp4"}')
+curl -sX POST "https://0x1.one/api/spaces/HZX2SE/upload?action=start" \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"hello.mp4","type":"video/mp4"}'
+# → {"ok":true,"key":"...","uploadId":"...","uploadedAt":"2026-09-09T02:33:57.256Z",...}
 
 # 2. part (repeat for each 5 MiB chunk; partNumber starts at 1)
-curl -sX POST "https://0x1.one/api/spaces/KPN9GQ/upload?action=part&key=...&uploadId=...&partNumber=1" \
+curl -sX POST "https://0x1.one/api/spaces/HZX2SE/upload?action=part&key=...&uploadId=...&partNumber=1" \
   -F "chunk=@chunk-001.bin"
+# → {"ok":true,"partNumber":1,"etag":"..."}
 
 # 3. complete (round-trip uploadedAt from step 1 verbatim)
-curl -sX POST "https://0x1.one/api/spaces/KPN9GQ/upload?action=complete" \
-  -H "Content-Type: application/json" \
-  -d '{"key":"...","uploadId":"...","parts":[...],"name":"hello.mp4","uploadedAt":"...from step 1..."}'
-
-# 4. download
-curl -s "https://0x1.one/api/spaces/KPN9GQ/files/<key>" -o hello.mp4
+curl -sX POST "https://0x1.one/api/spaces/HZX2SE/upload?action=complete" \
+  -H 'Content-Type: application/json' \
+  -d '{"key":"...","uploadId":"...","parts":[{"partNumber":1,"etag":"..."}],
+       "name":"hello.mp4","uploadedAt":"...from step 1..."}'
+# → {"ok":true,"key":"..."}
 ```
 
-### Email upload
+### List and download
 
-Send an email to `<share-slug>@0x1.one`. Attachments become files in that
-space; body text (≥10 chars after trimming) is stored as a markdown `.txt`.
+```bash
+curl -s "https://0x1.one/api/spaces/HZX2SE"
+# → {"slug":"HZX2SE","url":"https://0x1.one/HZX2SE","createdAt":...,"expiresAt":...,
+#    "files":[{"key":"1788921237256-l4b2av","name":"probe.txt","size":24,
+#              "uploadedAt":"2026-09-09T02:33:57.256Z"}]}
+
+curl -s "https://0x1.one/api/spaces/HZX2SE/files/1788921237256-l4b2av" -o probe.txt
+```
+
+## Email upload — no HTTP endpoint
+
+There is **no** `/api/spaces/email-upload` route. Email ingestion runs through
+Cloudflare Email Routing, so it is not an HTTP endpoint you can call.
+
+Send mail to `<share-slug>@0x1.one`. Attachments become files in that space;
+body text (≥10 chars after trimming) is stored as a markdown `.txt` named after
+the subject.
 
 ## Constraints
 
-- **Chunk size:** exactly 5 MiB (`5 * 1024 * 1024` bytes). No other size is accepted.
-- **Share code alphabet:** Crockford base32, 6 chars, uppercase only.
-  Pattern: `^[A-HJ-NP-Z2-9]{6}$` (no `I`, `O`, `0`, `1`).
-- **uploadedAt round-trips:** the value returned by `action=start` must be
-  passed back verbatim to `action=complete`. Regenerating it with
-  `datetime.now()` yields a session-invalid error.
-- **TTL:** `expiresInHours` default 3, max 24.
+- **Share code alphabet:** Crockford base32, 6 chars. Pattern `^[A-HJ-NP-Z2-9]{6}$`
+  (no `I`, `O`, `0`, `1`). Lowercase is accepted and uppercased for you.
+- **Chunk size:** exactly 5 MiB (`5 * 1024 * 1024` bytes) — chunked flow only.
+  No other size is accepted. The simple upload has no chunking constraint.
+- **uploadedAt round-trips:** the value returned by `action=start` must be passed
+  back verbatim to `action=complete`. Regenerating it with `datetime.now()` yields
+  a session-invalid error.
+- **Size limit:** the simple upload is bounded by the Cloudflare Worker request
+  body limit. Use the chunked flow for large files (roughly ≥100 MB).
+- **TTL:** `expiresInHours` default 3, min 1, max 24.
 - **No authentication.** Anyone with the share code can upload or download.
   Do not market this as private storage.
-- **Use GET, not HEAD.** The upstream protocol relies on GET for downloads.
-  HEAD may return 200 with empty body or 404 depending on edge infrastructure —
-  neither is meaningful; always use GET to verify downloads.
+- **Use GET, not HEAD.** HEAD may return 200 with an empty body or 404 depending
+  on edge infrastructure — neither is meaningful. Always GET to verify downloads.
 
-## Worked example
+## Errors
 
-A 72.4 MB / 14-chunk MP4 completes in ~3 s on residential broadband.
+| Status | Meaning |
+| --- | --- |
+| 400 | Malformed share code or file key, or a missing required part |
+| 404 | Share or file does not exist |
+| 410 | Share has expired |
+| 500 | Storage not configured, or a chunked upload failed to complete |
 
 ## Reference
 
