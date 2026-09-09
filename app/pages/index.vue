@@ -167,15 +167,11 @@ onMounted(() => {
       <p class="mt-5 max-w-xl text-[15px] leading-relaxed text-[#555]">Temporary sharing links that expire automatically. No accounts required. Start sharing, drop your files, and collaborate instantly.</p>
 
       <!-- Kept high in the DOM: agents that summarise or truncate the page
-           drop footer content, so the docs pointer must not live down there. -->
-      <a
-        href="/llms.txt"
-        class="mt-7 inline-flex items-center gap-2.5 border border-[color:var(--border)] bg-white px-4 py-2.5 text-[13px] font-medium transition-colors hover:border-[color:var(--text)]"
-      >
-        <span class="h-1.5 w-1.5 rounded-full bg-[color:var(--primary)]"></span>
-        For agents
-        <span class="font-mono-brand text-[11px] text-[color:var(--muted)]">/llms.txt</span>
-      </a>
+           drop footer content, so the docs pointer must not live down there.
+           Deliberately quiet — this is for machines, humans should barely see it. -->
+      <p class="mt-6 font-mono-brand text-[11px] tracking-widest text-[color:var(--muted)] uppercase">
+        <a href="/llms.txt" class="transition-colors hover:text-[color:var(--text)]">For Agents →</a>
+      </p>
     </header>
 
     <div class="space-y-6">
