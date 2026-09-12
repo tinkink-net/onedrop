@@ -58,7 +58,7 @@ const uploadError = ref('')
 const selectedFile = ref<File | null>(null)
 const copyStatus = ref('')
 const copyEmailStatus = ref('')
-const previewFailedKey = ref('')
+const viewFailedKey = ref('')
 const uploadInput = ref<HTMLInputElement | null>(null)
 const isUploadPanelOpen = ref(true)
 const isUploadPanelPinnedOpen = ref(false)
@@ -366,7 +366,7 @@ async function handleFilePickedAndUpload(event: Event) {
   }
 }
 
-const PREVIEWABLE_EXTENSIONS = new Set([
+const VIEWABLE_EXTENSIONS = new Set([
   'pdf',
   'png',
   'jpg',
@@ -388,20 +388,20 @@ function getFileExtension(name: string) {
   return name.slice(dot + 1).toLowerCase()
 }
 
-function isPreviewable(file: SpaceData['files'][number]) {
-  return PREVIEWABLE_EXTENSIONS.has(getFileExtension(file.name))
+function isViewable(file: SpaceData['files'][number]) {
+  return VIEWABLE_EXTENSIONS.has(getFileExtension(file.name))
 }
 
-async function openPreview(file: SpaceData['files'][number]) {
+async function openView(file: SpaceData['files'][number]) {
   try {
     const { open } = await import('flviewer')
     open(`/api/spaces/${slug.value}/files/${file.key}`, { title: file.name })
   }
   catch {
-    previewFailedKey.value = file.key
+    viewFailedKey.value = file.key
     window.setTimeout(() => {
-      if (previewFailedKey.value === file.key) {
-        previewFailedKey.value = ''
+      if (viewFailedKey.value === file.key) {
+        viewFailedKey.value = ''
       }
     }, 1600)
   }
@@ -679,11 +679,11 @@ onUnmounted(() => {
               </div>
               <div class="flex shrink-0 items-center gap-4">
                 <button
-                  v-if="isPreviewable(file)"
+                  v-if="isViewable(file)"
                   class="text-[13px] font-medium text-[color:var(--muted)] transition-colors hover:text-[color:var(--text)]"
-                  @click="openPreview(file)"
+                  @click="openView(file)"
                 >
-                  {{ previewFailedKey === file.key ? 'Preview failed' : 'Preview' }}
+                  {{ viewFailedKey === file.key ? 'View failed' : 'View' }}
                 </button>
                 <a
                   class="text-[13px] font-medium text-[color:var(--muted)] transition-colors hover:text-[color:var(--text)]"
