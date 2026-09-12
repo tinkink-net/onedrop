@@ -1,7 +1,0 @@
-allowBuilds:
-  '@parcel/watcher': false
-  esbuild: false
-  sharp: false
-  workerd: false
-minimumReleaseAgeExclude:
-  - flviewer@0.0.1 || 0.0.2
