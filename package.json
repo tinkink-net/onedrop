@@ -10,6 +10,7 @@
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
+    "flviewer": "^0.0.1",
     "nuxt": "^4.4.2",
     "postal-mime": "^2.7.4",
     "qrcode": "^1.5.4",

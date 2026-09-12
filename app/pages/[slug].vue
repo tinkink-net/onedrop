@@ -58,6 +58,7 @@ const uploadError = ref('')
 const selectedFile = ref<File | null>(null)
 const copyStatus = ref('')
 const copyEmailStatus = ref('')
+const previewFailedKey = ref('')
 const uploadInput = ref<HTMLInputElement | null>(null)
 const isUploadPanelOpen = ref(true)
 const isUploadPanelPinnedOpen = ref(false)
@@ -365,6 +366,47 @@ async function handleFilePickedAndUpload(event: Event) {
   }
 }
 
+const PREVIEWABLE_EXTENSIONS = new Set([
+  'pdf',
+  'png',
+  'jpg',
+  'jpeg',
+  'jfif',
+  'gif',
+  'webp',
+  'avif',
+  'bmp',
+  'ico',
+  'svg',
+])
+
+function getFileExtension(name: string) {
+  const dot = name.lastIndexOf('.')
+  if (dot < 0 || dot === name.length - 1) {
+    return ''
+  }
+  return name.slice(dot + 1).toLowerCase()
+}
+
+function isPreviewable(file: SpaceData['files'][number]) {
+  return PREVIEWABLE_EXTENSIONS.has(getFileExtension(file.name))
+}
+
+async function openPreview(file: SpaceData['files'][number]) {
+  try {
+    const { open } = await import('flviewer')
+    open(`/api/spaces/${slug.value}/files/${file.key}`, { title: file.name })
+  }
+  catch {
+    previewFailedKey.value = file.key
+    window.setTimeout(() => {
+      if (previewFailedKey.value === file.key) {
+        previewFailedKey.value = ''
+      }
+    }, 1600)
+  }
+}
+
 function formatBytes(size: number) {
   if (size < 1024) {
     return `${size} B`
@@ -635,12 +677,21 @@ onUnmounted(() => {
                    <span v-if="file.uploadedAt">Uploaded {{ formatTimeWithRelative(new Date(file.uploadedAt).getTime()) }}</span>
                 </div>
               </div>
-              <a
-                class="shrink-0 text-[13px] font-medium text-[color:var(--muted)] transition-colors hover:text-[color:var(--text)]"
-                :href="`/api/spaces/${slug}/files/${file.key}`"
-              >
-                Download ↓
-              </a>
+              <div class="flex shrink-0 items-center gap-4">
+                <button
+                  v-if="isPreviewable(file)"
+                  class="text-[13px] font-medium text-[color:var(--muted)] transition-colors hover:text-[color:var(--text)]"
+                  @click="openPreview(file)"
+                >
+                  {{ previewFailedKey === file.key ? 'Preview failed' : 'Preview' }}
+                </button>
+                <a
+                  class="text-[13px] font-medium text-[color:var(--muted)] transition-colors hover:text-[color:var(--text)]"
+                  :href="`/api/spaces/${slug}/files/${file.key}`"
+                >
+                  Download ↓
+                </a>
+              </div>
             </li>
          </ul>
 
